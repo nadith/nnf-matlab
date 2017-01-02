@@ -30,6 +30,7 @@ info = [];
 W = PCA.mcc(nndb_tr);
 accurary = Util.test(W, nndb_tr, nndb_te)
 
+% [Deprecated]
 % PCA-MCC (old implementation) - deprecated
 % features_tr = reshape(nndb_tr.db, nndb_tr.h * nndb_tr.w * nndb_tr.ch, nndb_tr.n);
 % features_te = reshape(nndb_te.db, nndb_tr.h * nndb_tr.w * nndb_tr.ch, nndb_te.n);
@@ -68,6 +69,7 @@ info = [];
 W = LDA.r1(nndb_tr);
 accurary = Util.test(W, nndb_tr, nndb_te)
 
+% [Deprecated]
 % R1/L1 LDA (old implementation) - deprecated
 % features_tr = reshape(nndb_tr.db, nndb_tr.h * nndb_tr.w * nndb_tr.ch, nndb_tr.n);
 % features_te = reshape(nndb_te.db, nndb_tr.h * nndb_tr.w * nndb_tr.ch, nndb_te.n);
