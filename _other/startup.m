@@ -2,7 +2,7 @@
 base_path = ['E:/Clouds/Google Drive/Curtin Univeristy (work)/Matlab/src'];
 
 % Workspace folder
-w_folder = 'MachineLearning';
+w_folder = 'ml';
 
 % Change the current directory to root folder
 eval(['cd ' '''' base_path '''']);
@@ -13,7 +13,15 @@ addpath (base_path);
 % Add path to matlab (recursive): current workspace 
 global w_path;
 w_path = [base_path '/' w_folder];
-addpath (genpath (w_path)); 
+infos = dir(w_path);
+for i=1:numel(infos)                
+    name = infos(i).name;
+    % Exclude these items in the current iteraing directory
+    if (strcmp(name, '.') || strcmp(name, '..') || name(1) == '.' || strcmp(name, '_other'))
+        continue;
+    end
+    addpath (genpath (name));                       
+end
 
 % Add path to matlab (recursive): selective external libs
 %wlib_folder = 'DeepLearnToolbox';
@@ -61,7 +69,7 @@ imdb_path = 'F:/#Research Data/FaceDB';
 env_load_im_db('imdb_mp', [imdb_path '/IMDB_64_64_ORL_8.mat']);
 
 % YaleB
-env_load_im_db('imdb_yaleb', ['F:/#Research Data/FaceDB/IMDB_66_58_YALEB_64.mat']);
+env_load_im_db('imdb_yaleb', [imdb_path '/IMDB_66_58_YALEB_64.mat']);
 
 % AR Database
 env_load_im_db('imdb_ar', [imdb_path '/IMDB_66_66_AR_12.mat']);
