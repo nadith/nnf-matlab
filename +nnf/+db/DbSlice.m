@@ -4,22 +4,26 @@ classdef DbSlice
     %
     % Selection Structure (with defaults)
     % -----------------------------------
-    % sel.tr_col_indices    = [];   % Training column indices
-    % sel.tr_noise_mask     = [];   % Noisy tr. col indices (bit mask)
-    % sel.tr_noise_rate     = [];   % Rate or noise types for the above field
-    % sel.tr_out_col_indices= [];   % Training target column indices
-    % sel.tr_cm_col_indices = [];   % TODO: Document
-    % sel.te_col_indices    = [];   % Testing column indices
-    % sel.nnpatches         = [];   % NNPatch object array
-    % sel.use_rgb           = true; % Use rgb or convert to grayscale
-    % sel.color_index       = [];   % Specific color indices (set .use_rgb = false)             
-    % sel.use_real          = false;% Use real valued database TODO: (if .normalize = true, Operations ends in real values)
-    % sel.scale             = [];   % Scaling factor (resize factor)
-    % sel.normalize         = false;% Normalize (0 mean, std = 1)
-    % sel.histeq            = false;% Histogram equalization
-    % sel.histmatch         = false;% Histogram match (ref. image: first image of the class)
-    % sel.class_range       = [];   % Class range
-    % sel.pre_process_script= [];   % Custom preprocessing script
+    % sel.tr_col_indices        = [];   % Training column indices
+    % sel.tr_noise_mask         = [];   % Noisy tr. col indices (bit mask)
+    % sel.tr_noise_rate         = [];   % Rate or noise types for the above field
+    % sel.tr_out_col_indices    = [];   % Training target column indices
+    % sel.val_col_indices       = [];   % Validation column indices
+    % sel.val_out_col_indices   = [];   % Validation target column indices
+    % sel.te_col_indices        = [];   % Testing column indices
+    % sel.nnpatches             = [];   % NNPatch object array
+    % sel.use_rgb               = true; % Use rgb or convert to grayscale
+    % sel.color_index           = [];   % Specific color indices (set .use_rgb = false)             
+    % sel.use_real              = false;% Use real valued database TODO: (if .normalize = true, Operations ends in real values)
+    % sel.scale                 = [];   % Scaling factor (resize factor)
+    % sel.normalize             = false;% Normalize (0 mean, std = 1)
+    % sel.histeq                = false;% Histogram equalization
+    % sel.histmatch             = false;% Histogram match (ref. image: first image of the class)
+    % sel.class_range           = [];   % Class range for all splits (tr, tr_out, te, val)
+    % sel.tr_class_range        = [];   % Class range for training database
+    % sel.val_class_range       = [];   % Class range for validation database
+    % sel.te_class_range        = [];   % Class range for testing database
+    % sel.pre_process_script    = [];   % Custom preprocessing script
     %
     % i.e
     % Pass a selection structure to split the nndb accordingly
@@ -31,7 +35,7 @@ classdef DbSlice
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         % Public Interface
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        function [nndbs_tr, nndbs_tr_out, nndbs_te, nndbs_tr_cm] = slice(nndb, sel) 
+        function [nndbs_tr, nndbs_val, nndbs_te, nndbs_tr_out, nndbs_val_out] = slice(nndb, sel) 
             % SLICE: slices the database according to the selection structure.
             % IMPL_NOTES: The new db will contain img at consecutive locations for duplicate indices
             % i.e Tr:[1 2 3 1], DB:[1 1 2 3]
@@ -47,22 +51,26 @@ classdef DbSlice
             %     i.e
             %       Selection Structure (with defaults)
             %       -----------------------------------
-            %       sel.tr_col_indices    = [];   % Training column indices
-            %       sel.tr_noise_mask     = [];   % Noisy tr. col indices (bit mask)
-            %       sel.tr_noise_rate     = [];   % Rate or noise types for the above field
-            %       sel.tr_out_col_indices= [];   % Training target column indices
-            %       sel.tr_cm_col_indices = [];   % TODO: Document
-            %       sel.te_col_indices    = [];   % Testing column indices
-            %       sel.nnpatches         = [];   % NNPatch object array
-            %       sel.use_rgb           = true; % Use rgb or convert to grayscale
-            %       sel.color_index       = [];   % Specific color indices (set .use_rgb = false)             
-            %       sel.use_real          = false;% Use real valued database TODO: (if .normalize = true, Operations ends in real values)
-            %       sel.scale             = [];   % Scaling factor (resize factor)
-            %       sel.normalize         = false;% Normalize (0 mean, std = 1)
-            %       sel.histeq            = false;% Histogram equalization
-            %       sel.histmatch         = false;% Histogram match (ref. image: first image of the class)
-            %       sel.class_range       = [];   % Class range
-            %       sel.pre_process_script= [];   % Custom preprocessing script
+            %       sel.tr_col_indices      = [];   % Training column indices
+            %       sel.tr_noise_mask       = [];   % Noisy tr. col indices (bit mask)
+            %       sel.tr_noise_rate       = [];   % Rate or noise types for the above field
+            %       sel.tr_out_col_indices  = [];   % Training target column indices
+            %       sel.val_col_indices     = [];     % Validation column indices
+            %       sel.val_out_col_indices = [];   % Validation target column indices
+            %       sel.te_col_indices      = [];   % Testing column indices
+            %       sel.nnpatches           = [];   % NNPatch object array
+            %       sel.use_rgb             = true; % Use rgb or convert to grayscale
+            %       sel.color_index         = [];   % Specific color indices (set .use_rgb = false)             
+            %       sel.use_real            = false;% Use real valued database TODO: (if .normalize = true, Operations ends in real values)
+            %       sel.scale               = [];   % Scaling factor (resize factor)
+            %       sel.normalize           = false;% Normalize (0 mean, std = 1)
+            %       sel.histeq              = false;% Histogram equalization
+            %       sel.histmatch           = false;% Histogram match (ref. image: first image of the class)
+            %       sel.class_range         = [];   % Class range for all splits (tr, tr_out, te, val)
+            %       sel.tr_class_range      = [];   % Class range for training database
+            %       sel.val_class_range     = [];   % Class range for validation database
+            %       sel.te_class_range      = [];   % Class range for testing database
+            %       sel.pre_process_script  = [];   % Custom preprocessing script
             % 
             %
             % Returns
@@ -70,14 +78,17 @@ classdef DbSlice
             % nndbs_tr : NNdb or cell- NNdb
             %      Training NNdb object(s). (Incase patch division is required).
             %
+            % nndbs_val : NNdb or cell- NNdb
+            %      Validation NNdb object(s). (Incase patch division is required).
+            %
+            % nndbs_te : NNdb or cell- NNdb
+            %      Testing NNdb object(s). (Incase patch division is required).   
+            %
             % nndbs_tr_out : NNdb or cell- NNdb
             %      Training target NNdb object(s). (Incase patch division is required).
             %
-            % nndbs_te : NNdb or cell- NNdb
-            %      Testing NNdb object(s). (Incase patch division is required).
-            %
-            % nndbs_tr_cm : NNdb or cell- NNdb
-            %      TODO: Yet to be documenteds (Incase patch division is required).
+            % nndbs_val_out : NNdb or cell- NNdb
+            %      Validation target NNdb object(s). (Incase patch division is required).
             %
             
             % Imports
@@ -87,44 +98,55 @@ classdef DbSlice
                         
             % Set defaults for arguments  
             if (nargin < 2 || isempty(sel))
-                sel.tr_col_indices        = [1:nndb.n_per_class(1)];
-                sel.tr_noise_mask         = [];
-                sel.tr_noise_rate         = [];
-                sel.tr_out_col_indices    = [];
-                sel.tr_cm_col_indices     = [];
-                sel.te_col_indices        = [];
-                sel.nnpatches             = [];
-                sel.use_rgb               = true;
-                sel.color_index           = [];                
-                sel.use_real              = false;
-                sel.scale                 = [];
-                sel.normalize             = false;
-                sel.histeq                = false;
-                sel.histmatch             = false;
-                sel.class_range           = [];
-                sel.pre_process_script    = [];                
+                sel.tr_col_indices      = [1:nndb.n_per_class(1)];
+                sel.tr_noise_mask       = [];
+                sel.tr_noise_rate       = [];
+                sel.tr_out_col_indices  = [];
+                sel.val_col_indices     = [];
+                sel.val_out_col_indices = [];
+                sel.te_col_indices      = [];
+                sel.nnpatches           = [];
+                sel.use_rgb             = true;
+                sel.color_index         = [];                
+                sel.use_real            = false;
+                sel.scale               = [];
+                sel.normalize           = false;
+                sel.histeq              = false;
+                sel.histmatch           = false;
+                sel.class_range         = [];
+                sel.tr_class_range      = [];
+                sel.val_class_range     = [];
+                sel.te_class_range      = [];
+                sel.pre_process_script  = [];                
             end
 
             % Set defaults for selection fields, if the field does not exist            
-            if (~isfield(sel, 'tr_noise_mask'));              sel.tr_noise_mask     = [];       end;
-            if (~isfield(sel, 'tr_noise_rate'));              sel.tr_noise_rate     = [];       end;
-            if (~isfield(sel, 'tr_out_col_indices'));         sel.tr_out_col_indices= [];       end;
-            if (~isfield(sel, 'tr_cm_col_indices'));          sel.tr_cm_col_indices = [];       end;
-            if (~isfield(sel, 'te_col_indices'));             sel.te_col_indices    = [];       end;
-            if (~isfield(sel, 'nnpatches'));                  sel.nnpatches         = [];       end;
-            if (~isfield(sel, 'use_rgb'));                    sel.use_rgb           = true;     end;
-            if (~isfield(sel, 'color_index'));                sel.color_index       = [];       end;
-            if (~isfield(sel, 'use_real'));                   sel.use_real          = false;    end;
-            if (~isfield(sel, 'scale'));                      sel.scale             = [];       end;
-            if (~isfield(sel, 'normalize'));                  sel.normalize         = false;    end;
-            if (~isfield(sel, 'histeq'));                     sel.histeq            = false;    end;
-            if (~isfield(sel, 'histmatch'));                  sel.histmatch         = false;    end;
-            if (~isfield(sel, 'class_range'));                sel.class_range       = [];       end;
-            if (~isfield(sel, 'pre_process_script'));         sel.pre_process_script= [];       end;
+            if (~isfield(sel, 'tr_noise_mask'));        sel.tr_noise_mask       = [];       end;
+            if (~isfield(sel, 'tr_noise_rate'));        sel.tr_noise_rate       = [];       end;
+            if (~isfield(sel, 'tr_out_col_indices'));   sel.tr_out_col_indices  = [];       end;
+            if (~isfield(sel, 'val_col_indices'));      sel.val_col_indices     = [];       end;
+            if (~isfield(sel, 'val_out_col_indices'));  sel.val_out_col_indices = [];       end;
+            if (~isfield(sel, 'te_col_indices'));       sel.te_col_indices      = [];       end;
+            if (~isfield(sel, 'nnpatches'));            sel.nnpatches           = [];       end;
+            if (~isfield(sel, 'use_rgb'));              sel.use_rgb             = true;     end;
+            if (~isfield(sel, 'color_index'));          sel.color_index         = [];       end;
+            if (~isfield(sel, 'use_real'));             sel.use_real            = false;    end;
+            if (~isfield(sel, 'scale'));                sel.scale               = [];       end;
+            if (~isfield(sel, 'normalize'));            sel.normalize           = false;    end;
+            if (~isfield(sel, 'histeq'));               sel.histeq              = false;    end;
+            if (~isfield(sel, 'histmatch'));            sel.histmatch           = false;    end;
+            if (~isfield(sel, 'class_range'));          sel.class_range         = [];       end;
+            if (~isfield(sel, 'tr_class_range'));       sel.tr_class_range      = [];       end;            
+            if (~isfield(sel, 'val_class_range'));      sel.val_class_range     = [];       end;
+            if (~isfield(sel, 'te_class_range'));       sel.te_class_range      = [];       end;
+            if (~isfield(sel, 'pre_process_script'));   sel.pre_process_script  = [];       end;
             
           	% Error handling for arguments
-            if (isempty(sel.tr_col_indices) && isempty(sel.tr_out_col_indices) ...
-                && isempty(sel.tr_cm_col_indices) && isempty(sel.te_col_indices))
+            if (isempty(sel.tr_col_indices) && ...
+                isempty(sel.tr_out_col_indices) && ...
+                isempty(sel.val_col_indices) && ...
+                isempty(sel.val_out_col_indices) && ...
+                isempty(sel.te_col_indices))
                 error('ARG_ERR: [tr|tr_out|tr_cm|te]_col_indices: mandory field');
             end            
             if (sel.use_rgb && ~isempty(sel.color_index))
@@ -135,31 +157,38 @@ classdef DbSlice
             end
                            
             % Fetch the counts
-            tr_n_per_class         = numel(sel.tr_col_indices);
-            tr_out_n_per_class     = numel(sel.tr_out_col_indices);
-            tr_cm_n_per_class      = numel(sel.tr_cm_col_indices);
-            te_n_per_class         = numel(sel.te_col_indices);
+            tr_n_per_class      = numel(sel.tr_col_indices);
+            tr_out_n_per_class  = numel(sel.tr_out_col_indices);
+            val_n_per_class     = numel(sel.val_col_indices);
+            val_out_n_per_class = numel(sel.val_out_col_indices);
+            te_n_per_class      = numel(sel.te_col_indices);
 
             cls_range              = sel.class_range;
             if (isempty(cls_range))
                 cls_range = 1:nndb.cls_n;
-            end           
-
+            end   
+            
+            % Set defaults for class ranges
+            val_cls_range = sel.val_class_range;
+            te_cls_range =  sel.te_class_range;
+            if (isempty(sel.val_class_range)); val_cls_range = cls_range; end
+            if (isempty(sel.te_class_range)); te_cls_range = cls_range; end
+            
             % NOTE: TODO: Whitening the root db did not perform well (co-variance is indeed needed)
             
             % Initialize NNdb cell arrays
-            type         = class(nndb.db);
-            cls_n        = numel(cls_range);  
-            nndbs_tr     = DbSlice.init_nndb('Training', type, sel, nndb, tr_n_per_class, cls_n, true);
-            nndbs_te     = DbSlice.init_nndb('Testing', type, sel, nndb, te_n_per_class, cls_n, true);
-            nndbs_tr_out = DbSlice.init_nndb('Cannonical', type, sel, nndb, tr_out_n_per_class, cls_n, false);
-            nndbs_tr_cm  = DbSlice.init_nndb('Cluster-Means', type, sel, nndb, tr_cm_n_per_class, cls_n, false);            
+            type         = class(nndb.db);  
+            nndbs_tr     = DbSlice.init_nndb('Training', type, sel, nndb, tr_n_per_class, numel(cls_range), true);
+            nndbs_tr_out = DbSlice.init_nndb('Cannonical', type, sel, nndb, tr_out_n_per_class, numel(cls_range), false);
+            nndbs_val    = DbSlice.init_nndb('Validation', type, sel, nndb, val_n_per_class, numel(val_cls_range), true);   
+            nndbs_val_out= DbSlice.init_nndb('ValCannonical', type, sel, nndb, val_out_n_per_class, numel(val_cls_range), false);
+            nndbs_te     = DbSlice.init_nndb('Testing', type, sel, nndb, te_n_per_class, numel(te_cls_range), true);
                        
             % Fetch iterative range
-            data_range = DbSlice.get_data_range(cls_range, nndb);
+            data_range = DbSlice.get_data_range(cls_range, val_cls_range, te_cls_range, nndb);
            
-            % Iterate over the cls_st indices
-            j = 1;
+            % Iterate over the cls_st indices (i_cls => current cls index)
+            i_cls = 1;
             
             % Patch count
             patch_loop_max_n = numel(sel.nnpatches);
@@ -168,7 +197,8 @@ classdef DbSlice
             % Initialize the indices
             tr_idxs = uint16(ones(1, patch_loop_max_n));
             tr_out_idxs = uint16(ones(1, patch_loop_max_n));
-            tr_cm_idxs = uint16(ones(1, patch_loop_max_n));
+            val_idxs = uint16(ones(1, patch_loop_max_n));
+            val_out_idxs = uint16(ones(1, patch_loop_max_n));
             te_idxs = uint16(ones(1, patch_loop_max_n));
             
             % PERF: Noise required indices (avoid find in each iteration)
@@ -182,20 +212,26 @@ classdef DbSlice
                             
                 % Update the current prev_cls_en
                 % Since 'i' may not be consecutive
-                while ((numel(nndb.cls_st) >= (j+1)) && (i >= nndb.cls_st(j+1)))
-                    j = j + 1;
+                while ((numel(nndb.cls_st) >= (i_cls+1)) && (i >= nndb.cls_st(i_cls+1)))
+                    i_cls = i_cls + 1;
                 end
-                prev_cls_en = nndb.cls_st(j) - 1;
+                prev_cls_en = nndb.cls_st(i_cls) - 1;
                 
                 % Checks whether current 'img' needs processing
-                f = (~isempty(nndbs_tr) && ~isempty(DbSlice.find(i, prev_cls_en, sel.tr_col_indices)));
-                f = f | (~isempty(nndbs_tr_out) && ~isempty(DbSlice.find(i, prev_cls_en, sel.tr_out_col_indices)));
-                f = f | (~isempty(nndbs_tr_cm) && ~isempty(DbSlice.find(i, prev_cls_en, sel.tr_cm_col_indices)));
-                f = f | (~isempty(nndbs_te) && ~isempty(DbSlice.find(i, prev_cls_en, sel.te_col_indices)));
+%                 f = (~isempty(nndbs_tr) && ~isempty(DbSlice.find(i, prev_cls_en, sel.tr_col_indices)));
+%                 f = f | (~isempty(nndbs_tr_out) && ~isempty(DbSlice.find(i, prev_cls_en, sel.tr_out_col_indices)));
+%                 f = f | (~isempty(nndbs_val) && ~isempty(DbSlice.find(i, prev_cls_en, sel.val_col_indices)));
+%                 f = f | (~isempty(nndbs_te) && ~isempty(DbSlice.find(i, prev_cls_en, sel.te_col_indices)));                
+                
+                f = ~DbSlice.dicard_needed(nndbs_tr, i, i_cls, cls_range, prev_cls_en, sel.tr_col_indices);
+                f = f | ~DbSlice.dicard_needed(nndbs_tr_out, i, i_cls, cls_range, prev_cls_en, sel.tr_out_col_indices);
+                f = f | ~DbSlice.dicard_needed(nndbs_val, i, i_cls, val_cls_range, prev_cls_en, sel.val_col_indices);
+                f = f | ~DbSlice.dicard_needed(nndbs_val_out, i, i_cls, val_cls_range, prev_cls_en, sel.val_out_col_indices);
+                f = f | ~DbSlice.dicard_needed(nndbs_te, i, i_cls, te_cls_range, prev_cls_en, sel.te_col_indices);
                 if (~f); continue; end
                     
                 % Iterate through image patches
-                for pI=1:patch_loop_max_n
+                for pI=1:patch_loop_max_n 
                     
                     % Holistic image (by default)
                     img = cimg;
@@ -248,19 +284,23 @@ classdef DbSlice
                         
                     % Build Training DB
                     [nndbs_tr, tr_idxs] = ...
-                        DbSlice.build_nndb_tr(nndbs_tr, pI, tr_idxs, i, prev_cls_en, img, sel, nf);
+                        DbSlice.build_nndb_tr(nndbs_tr, pI, tr_idxs, i, i_cls, cls_range, prev_cls_en, img, sel, nf);
 
-                    % Build Training Output DB
+                    % Build Training Target DB
                     [nndbs_tr_out, tr_out_idxs] = ...
-                        DbSlice.build_nndb_tr_out(nndbs_tr_out, pI, tr_out_idxs, i, prev_cls_en, img, sel);
+                        DbSlice.build_nndb_tr_out(nndbs_tr_out, pI, tr_out_idxs, i, i_cls, cls_range, prev_cls_en, img, sel);
 
-                    % Build Training Cluster Centers (For Multi Label DDA) DB
-                    [nndbs_tr_cm, tr_cm_idxs] = ...
-                        DbSlice.build_nndb_tr_cm(nndbs_tr_cm, pI, tr_cm_idxs, i, prev_cls_en, img, sel);
+                    % Build Valdiation DB
+                    [nndbs_val, val_idxs] = ...
+                        DbSlice.build_nndb_val(nndbs_val, pI, val_idxs, i, i_cls, val_cls_range, prev_cls_en, img, sel);
 
+                    % Build Valdiation Target DB
+                    [nndbs_val_out, val_out_idxs] = ...
+                        DbSlice.build_nndb_val(nndbs_val_out, pI, val_out_idxs, i, i_cls, val_cls_range, prev_cls_en, img, sel);
+                    
                     % Build Testing DB
                     [nndbs_te, te_idxs] = ...
-                        DbSlice.build_nndb_te(nndbs_te, pI, te_idxs, i, prev_cls_en, img, sel);
+                        DbSlice.build_nndb_te(nndbs_te, pI, te_idxs, i, i_cls, te_cls_range, prev_cls_en, img, sel);
                 end
             end              
             
@@ -268,11 +308,12 @@ classdef DbSlice
             if (isempty(sel.nnpatches))
                 if (~isempty(nndbs_tr)); nndbs_tr = nndbs_tr{1}; end
                 if (~isempty(nndbs_tr_out)); nndbs_tr_out = nndbs_tr_out{1}; end
-                if (~isempty(nndbs_tr_cm)); nndbs_tr_cm = nndbs_tr_cm{1}; end
                 if (~isempty(nndbs_te)); nndbs_te = nndbs_te{1}; end
+                if (~isempty(nndbs_val)); nndbs_val = nndbs_val{1}; end
+                if (~isempty(nndbs_val_out)); nndbs_val_out = nndbs_val_out{1}; end                
             end                
-        end
-        
+        end       
+   
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         function examples(imdb_8)
             %EXAMPLES: Extensive example set
@@ -306,6 +347,7 @@ classdef DbSlice
             import nnf.db.DbSlice;
             import nnf.core.generators.NNPatchGenerator;
             
+            
             % 
             % Select 1st 2nd 4th images of each identity for training.
             nndb = NNdb('original', imdb_8, 8, true);
@@ -313,6 +355,7 @@ classdef DbSlice
             sel.tr_col_indices = [1:2 4]; %[1 2 4]; 
             [nndb_tr, ~, ~, ~] = DbSlice.slice(nndb, sel); % nndb_tr = DbSlice.slice(nndb, sel); 
 
+            
             %
             % Select 1st 2nd 4th images of each identity for training.
             % Divide into patches
@@ -332,6 +375,7 @@ classdef DbSlice
             figure,
             nndbs_tr{4}.show() 
             
+            
             % 
             % Select 1st 2nd 4th images of each identity for training.
             % Select 3rd 5th images of each identity for testing.
@@ -341,6 +385,7 @@ classdef DbSlice
             sel.te_col_indices = [3 5];     %[3 5]; 
             [nndb_tr, ~, nndb_te, ~] = DbSlice.slice(nndb, sel);
             
+            
            	% 
             % Select 1st 2nd 4th images of identities denoted by class_range for training.
             % Select 3rd 5th images of identities denoted by class_range for testing.            
@@ -348,8 +393,61 @@ classdef DbSlice
             sel = [];
             sel.tr_col_indices = [1:2 4];   %[1 2 4]; 
             sel.te_col_indices = [3 5];     %[3 5]; 
-            sel.class_range    = [1:10];    % First then identities 
+            sel.class_range    = [1:10];    % First ten identities 
             [nndb_tr, ~, nndb_te, ~] = DbSlice.slice(nndb, sel);
+            
+            
+            % 
+            % Select 1st 2nd 4th images of identities denoted by class_range for training.
+            % Select 1st 2nd 4th images images of identities denoted by class_range for validation.   
+            % Select 3rd 5th images of identities denoted by class_range for testing. 
+            nndb = NNdb('original', imdb_8, 8, true);
+            sel = [];
+            sel.tr_col_indices = [1:2 4];   %[1 2 4]; 
+            sel.val_col_indices= [1:2 4];   %[1 2 4]; 
+            sel.te_col_indices = [3 5];     %[3 5]; 
+            sel.class_range    = [1:10];    % First ten identities 
+            [nndb_tr, nndb_val, nndb_te, ~] = DbSlice.slice(nndb, sel);
+            
+            
+            % 
+            % Select 1st 2nd 4th images of identities denoted by class_range for training.
+            % Select 1st 2nd 4th images images of identities denoted by val_class_range for validation.   
+            % Select 3rd 5th images of identities denoted by te_class_range for testing. \
+            nndb = NNdb('original', imdb_8, 8, true);
+            sel = [];
+            sel.tr_col_indices = [1:2 4];   %[1 2 4]; 
+            sel.val_col_indices= [1:2 4];   %[1 2 4]; 
+            sel.te_col_indices = [3 5];     %[3 5]; 
+            sel.class_range    = [1:10];    % First ten identities 
+            sel.val_class_range= [6:15];
+            sel.te_class_range = [17:20];
+            [nndb_tr, nndb_val, nndb_te, ~] = DbSlice.slice(nndb, sel);
+            
+            
+            % 
+            % Select 1st 2nd 4th images of identities denoted by class_range for training.
+            % Select 3rd 4th images of identities denoted by val_class_range for validation.
+            % Select 3rd 5th images of identities denoted by te_class_range for testing.
+            % Select 1st 1st 1st images of identities denoted by class_range for training target.
+            % Select 1st 1st images of identities denoted by val_class_range for validation target.
+            nndb = NNdb('original', imdb_8, 8, true);
+            sel = [];
+            sel.tr_col_indices      = [1:2 4];
+            sel.val_col_indices     = [3 4];
+            sel.te_col_indices      = [3 5]; 
+            sel.tr_out_col_indices  = [1 1 1];
+            sel.val_out_col_indices = [1 1];  
+            sel.class_range         = [1:10];
+            sel.val_class_range     = [6:15];
+            sel.te_class_range      = [17:20];
+            [nndb_tr, nndb_val, nndb_te, nndb_tr_out, nndb_val_out] = DbSlice.slice(nndb, sel);
+            nndb_tr.show(10, 3)
+            figure, nndb_val.show(10, 2)
+            figure, nndb_te.show(4, 2)
+            figure, nndb_tr_out.show(10, 3)            
+            figure, nndb_val_out.show(10, 2) 
+
             
             % 
             % Select 1st 2nd 4th images of each identity for training + 
@@ -423,9 +521,6 @@ classdef DbSlice
             sel.color_index    = 5;         % color channel denoted by 5th index
             [nndb_tr, ~, nndb_te, ~] = DbSlice.slice(nndb, sel);
 
-            
-            
-            
         end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -503,7 +598,7 @@ classdef DbSlice
         end
 
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        function data_range = get_data_range(cls_range, nndb) 
+        function data_range = get_data_range(cls_range, val_cls_range, te_cls_range, nndb) 
             % GET_DATA_RANGE: fetches the data_range (images indices).          
             %            
             % Returns
@@ -512,14 +607,16 @@ classdef DbSlice
             %      data indicies.
             %
             
-            % Class count
+            % Union of all class ranges
+            cls_range = union(union(cls_range, val_cls_range), te_cls_range);
+            
+            % Total class count
             cls_n = numel(cls_range);
             
             % *Ease of implementation
             % Allocate more memory, shrink it later
             data_range = uint32(zeros(1, cls_n * max(nndb.n_per_class)));   
                        
-            % TODO: Compatibility for other NNdb Formats. (H x W x CH x N x NP)
             st = 1;
             for i = 1:cls_n
                 ii = cls_range(i);
@@ -567,7 +664,7 @@ classdef DbSlice
         end
 
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        function [nndbs, ni] = build_nndb_tr(nndbs, pi, ni, i, prev_cls_en, img, sel, noise_found) 
+        function [nndbs, ni] = build_nndb_tr(nndbs, pi, ni, i, i_cls, cls_range, prev_cls_en, img, sel, noise_found) 
             % BUILD_NNDB_TR: builds the nndb training database.
             %          
             % Returns
@@ -587,9 +684,9 @@ classdef DbSlice
             if (isempty(nndbs)); return; end;
             nndb = nndbs{pi};
             
-            % Find whether 'i' is in required indices 
-            found = DbSlice.find(i, prev_cls_en, sel.tr_col_indices);                
-            if (~found); return; end; 
+            % Find whether 'i' is in required indices             
+            [discard, found] = DbSlice.dicard_needed(nndbs, i, i_cls, cls_range, prev_cls_en, sel.tr_col_indices);               
+            if (discard); return; end; 
             
             % Iterate over found indices
             for j=1:numel(found)
@@ -678,7 +775,7 @@ classdef DbSlice
         end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        function [nndbs, ni] = build_nndb_tr_out(nndbs, pi, ni, i, prev_cls_en, img, sel) 
+        function [nndbs, ni] = build_nndb_tr_out(nndbs, pi, ni, i, i_cls, cls_range, prev_cls_en, img, sel) 
             % BUILD_NNDB_TR_OUT: builds the nndb training target database.
             %            
             % Returns
@@ -697,19 +794,19 @@ classdef DbSlice
             nndb = nndbs{pi};
             
             % Find whether 'i' is in required indices                
-            found = DbSlice.find(i, prev_cls_en, sel.tr_out_col_indices);                
-            if (~found); return; end; 
+            [discard, found] = DbSlice.dicard_needed(nndbs, i, i_cls, cls_range, prev_cls_en, sel.tr_out_col_indices);                
+            if (discard); return; end; 
             
             % Iterate over found indices
             for j=1:numel(found)
                 nndb.set_data_at(img, ni(pi));
-                ni(pi) = ni(p1) + 1;
+                ni(pi) = ni(pi) + 1;
             end 
         end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        function [nndbs, ni] = build_nndb_tr_cm(nndbs, pi, ni, i, prev_cls_en, img, sel) 
-            % BUILD_NNDB_TR_CM: builds the nndb training  mean centre database.
+        function [nndbs, ni] = build_nndb_val(nndbs, pi, ni, i, i_cls, cls_range, prev_cls_en, img, sel) 
+            % BUILD_NNDB_VAL: builds the nndb validation database.
             %            
             % Returns
             % -------
@@ -727,8 +824,8 @@ classdef DbSlice
             nndb = nndbs{pi};
             
             % Find whether 'i' is in required indices                
-            found = DbSlice.find(i, prev_cls_en, sel.tr_cm_col_indices);                
-            if (~found); return; end; 
+            [discard, found] = DbSlice.dicard_needed(nndbs, i, i_cls, cls_range, prev_cls_en, sel.val_col_indices);                
+            if (discard); return; end; 
 
             % Iterate over found indices
             for j=1:numel(found)
@@ -738,7 +835,37 @@ classdef DbSlice
         end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        function [nndbs, ni] = build_nndb_te(nndbs, pi, ni, i, prev_cls_en, img, sel) 
+        function [nndbs, ni] = build_nndb_val_out(nndbs, pi, ni, i, i_cls, cls_range, prev_cls_en, img, sel) 
+            % BUILD_NNDB_VAL_OUT: builds the nndb validation target database.
+            %            
+            % Returns
+            % -------
+            % nndbs : cell- NNdb
+            %      Updated NNdb objects.
+            %
+            % ni : vector -uint16
+            %      Updated image count vector.
+            %
+            
+            % Imports 
+            import nnf.db.DbSlice;
+
+            if (isempty(nndbs)); return; end;
+            nndb = nndbs{pi};
+            
+            % Find whether 'i' is in required indices                
+            [discard, found] = DbSlice.dicard_needed(nndbs, i, i_cls, cls_range, prev_cls_en, sel.val_col_indices);                
+            if (discard); return; end; 
+
+            % Iterate over found indices
+            for j=1:numel(found)
+                nndb.set_data_at(img, ni(pi));
+                ni(pi) = ni(pi) + 1;
+            end
+        end        
+        
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        function [nndbs, ni] = build_nndb_te(nndbs, pi, ni, i, i_cls, cls_range, prev_cls_en, img, sel) 
             % BUILD_NNDB_TE: builds the testing database.
             %            
             % Returns
@@ -757,18 +884,18 @@ classdef DbSlice
             nndb = nndbs{pi};
             
             % Find whether 'i' is in required indices                
-            found = DbSlice.find(i, prev_cls_en, sel.te_col_indices);                
-            if (~found); return; end;  
+            [discard, found] = DbSlice.dicard_needed(nndbs, i, i_cls, cls_range, prev_cls_en, sel.te_col_indices);                
+            if (discard); return; end;  
                     
             % Iterate over found indices
-            for j=1:numel(found)
+            for j=1:numel(found) 
                 nndb.set_data_at(img, ni(pi));
                 ni(pi) = ni(pi) + 1;
             end 
         end
         
       	%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        function [found] = find(i, prev_cls_en, col_indices)
+        function [found] = find(i, prev_cls_en, col_indices) 
             % FIND: checks whether 'i' is in required indices
 
             found = [];             
@@ -776,6 +903,28 @@ classdef DbSlice
 
             % Find whether 'i' is in required indices
             found = find((mod(double(i)-double(col_indices), double(prev_cls_en)) == 0) == 1);  
+        end
+        
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        function [discard, found] = dicard_needed(nndbs, i, i_cls, cls_range, prev_cls_en, col_indices) 
+            % DICARD_NEEDED: checks whether the given index 'i' needs be dicarded.
+            %
+            % Returns
+            % -------
+            % discard : bool
+            %      Boolean indicating the dicard. 
+            %
+            % found : bool
+            %      If discard=false, found denotes the index 'i' found positions in col_indices.
+            %
+            
+            % Imports 
+            import nnf.db.DbSlice;
+            
+            found = DbSlice.find(i, prev_cls_en, col_indices);            
+            discard = ~(~isempty(nndbs) && ...
+                        ~isempty(intersect(i_cls, cls_range)) && ...
+                        ~isempty(found));
         end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
