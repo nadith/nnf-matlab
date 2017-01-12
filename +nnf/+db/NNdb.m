@@ -81,7 +81,7 @@ classdef NNdb < handle
         end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        function data = get_data_at(self, si, pi) 
+        function data = get_data_at(self, ni) 
             % GET_DATA_AT: gets data from database at i.
             %
             % Parameters
@@ -97,22 +97,22 @@ classdef NNdb < handle
             import nnf.db.Format;
             
             % Error handling for arguments
-            assert(si <= self.n);            
+            assert(ni <= self.n);            
                         
             % Get data according to the format
             if (self.format == Format.H_W_CH_N)
-                data = self.db(:, :, :, si);
-            elseif (self.format == Format.H_W_CH_N_NP)
-                data = self.db(:, :, :, si, pi);
+                data = self.db(:, :, :, ni);
             elseif (self.format == Format.H_N)
-                data = self.db(:, si);
-            elseif (self.format == Format.H_N_NP)
-                data = self.db(:, :, si, pi);
+                data = self.db(:, ni);
+            elseif (self.format == Format.N_H_W_CH)
+                data = self.db(ni, :, :, :);
+            elseif (self.format == Format.N_H)
+                data = self.db(ni, :);
             end
         end
         
        	%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        function set_data_at(self, data, si, pi) 
+        function set_data_at(self, data, ni) 
             % SET_DATA_AT: sets data in database at i.
             %
             % Parameters
@@ -131,17 +131,17 @@ classdef NNdb < handle
             import nnf.db.Format;
             
             % Error handling for arguments
-            assert(si <= self.n);
+            assert(ni <= self.n);
                         
             % Get data according to the format
             if (self.format == Format.H_W_CH_N)
-                 self.db(:, :, :, si) = data;
-            elseif (self.format == Format.H_W_CH_N_NP)
-                 self.db(:, :, :, si, pi) = data;
+                self.db(:, :, :, ni) = data;
             elseif (self.format == Format.H_N)
-                 self.db(:, si) = data;
-            elseif (self.format == Format.H_N_NP)
-                 self.db(:, :, si, pi) = data;
+                self.db(:, ni) = data;
+            elseif (self.format == Format.N_H_W_CH)
+                self.db(ni, :, :, :) = data
+            elseif (self.format == Format.N_H)
+            	self.db(ni, :) = data
             end
         end
         
@@ -175,6 +175,7 @@ classdef NNdb < handle
             % 
             % n_per_class : vector -uint16 or scalar, optional
             %     No. images per each class. (Default value = []).
+            %     If (n_per_class=[] and cls_lbl=[]) then n_per_class = total image count
             % 
             % build_cls_lbl : bool, optional
             %     Build the class indices or not. (Default value = false).
@@ -186,23 +187,35 @@ classdef NNdb < handle
             %     Format of the database. (Default value = 1, start from 1).
             %
             
-            % TODO: Error handling
-            
             % Imports
             import nnf.db.Format; 
 
             % Error handling for arguments
             if (isempty(db))
                 error('ARG_ERR: n_per_class: undefined');
-            end            
-            if (isempty(n_per_class))
-                error('ARG_ERR: n_per_class: undefined');
-            end            
+            end                      
             if (isempty(format))
                 error('ARG_ERR: format: undefined');
             end            
             if (~isempty(cls_lbl) && build_cls_lbl)
                 warning('ARG_CONFLICT: cls_lbl, build_cls_lbl');
+            end
+            
+            % Set defaults for n_per_class
+            if (isempty(n_per_class) && isempty(cls_lbl))
+                if (format == Format.H_W_CH_N)
+                    [~, ~, ~, n_per_class] = size(self.db);
+                elseif (format == Format.H_N)
+                    [~, n_per_class] = size(self.db);
+                elseif (format == Format.N_H_W_CH)
+                    [n_per_class, ~, ~, ~] = size(self.db);
+                elseif (format == Format.N_H)
+                    [n_per_class, ~] = size(self.db);
+                end
+                
+            elseif (isempty(n_per_class))
+                % Build n_per_class from cls_lbl
+                [n_per_class, ~] = hist(cls_lbl,unique(cls_lbl))
             end
             
         	% Set defaults for instance variables
@@ -220,12 +233,12 @@ classdef NNdb < handle
             % Set h, w, ch, np according to the format    
             if (format == Format.H_W_CH_N)
                 [self.h, self.w, self.ch, self.n] = size(self.db);
-            elseif (format == Format.H_W_CH_N_NP)
-                [self.h, self.w, self.ch, self.n] = size(self.db);
             elseif (format == Format.H_N)
                 [self.h, self.n] = size(self.db);
-            elseif (format == Format.H_N_NP)
-                [self.h, self.n, self.np] = size(self.db);
+            elseif (format == Format.N_H_W_CH)
+                [ self.n, self.h, self.w, self.ch] = size(self.db);
+            elseif (format == Format.N_H)
+                [self.n, self.h] = size(self.db);
             end
                    
             % Set class count, n_per_class, class start index
@@ -260,13 +273,13 @@ classdef NNdb < handle
                   
             % Build uniform cls labels if cls_lbl is not given  
             if (build_cls_lbl && isempty(cls_lbl))
-                    self.build_uniform_cls_lbl();
+                    self.build_sorted_cls_lbl();
             end             
         end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        function build_uniform_cls_lbl(self) 
-            % BUILD_UNIFORM_CLS_LBL: Builds a uniform class indicies/labels  for samples
+        function build_sorted_cls_lbl(self) 
+            % BUILD_sorted_CLS_LBL: Builds a sorted class indicies/labels  for samples
             
             n_per_class = self.n_per_class;            
                         

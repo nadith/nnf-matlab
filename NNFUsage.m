@@ -7,6 +7,7 @@ import nnf.alg.*;
 
 % Create a NNdb database with AR database (12 images per identity)
 nndb = NNdb('original', imdb_ar, 12, true);
+sel = [];
 sel.tr_col_indices        = [1:3 7:12]; % [1 2 3 7 8 9 10 11 12]; 
 sel.te_col_indices        = [4:6]; % [4 5 6];
 sel.use_rgb               = false;              
