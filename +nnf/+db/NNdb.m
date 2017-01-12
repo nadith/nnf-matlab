@@ -260,13 +260,13 @@ classdef NNdb < handle
                   
             % Build uniform cls labels if cls_lbl is not given  
             if (build_cls_lbl && isempty(cls_lbl))
-                    self.build_uniform_cls_lbl();
+                    self.build_sorted_cls_lbl();
             end             
         end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        function build_uniform_cls_lbl(self) 
-            % BUILD_UNIFORM_CLS_LBL: Builds a uniform class indicies/labels  for samples
+        function build_sorted_cls_lbl(self) 
+            % BUILD_sorted_CLS_LBL: Builds a sorted class indicies/labels  for samples
             
             n_per_class = self.n_per_class;            
                         
