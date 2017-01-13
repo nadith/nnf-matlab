@@ -81,7 +81,7 @@ classdef NNdb < handle
         end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        function data = get_data_at(self, si, pi) 
+        function data = get_data_at(self, ni, pi) 
             % GET_DATA_AT: gets data from database at i.
             %
             % Parameters
@@ -97,22 +97,22 @@ classdef NNdb < handle
             import nnf.db.Format;
             
             % Error handling for arguments
-            assert(si <= self.n);            
+            assert(ni <= self.n);            
                         
             % Get data according to the format
             if (self.format == Format.H_W_CH_N)
-                data = self.db(:, :, :, si);
+                data = self.db(:, :, :, ni);
             elseif (self.format == Format.H_W_CH_N_NP)
-                data = self.db(:, :, :, si, pi);
+                data = self.db(:, :, :, ni, pi);
             elseif (self.format == Format.H_N)
-                data = self.db(:, si);
+                data = self.db(:, ni);
             elseif (self.format == Format.H_N_NP)
-                data = self.db(:, :, si, pi);
+                data = self.db(:, :, ni, pi);
             end
         end
         
        	%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        function set_data_at(self, data, si, pi) 
+        function set_data_at(self, data, ni, pi) 
             % SET_DATA_AT: sets data in database at i.
             %
             % Parameters
@@ -131,17 +131,17 @@ classdef NNdb < handle
             import nnf.db.Format;
             
             % Error handling for arguments
-            assert(si <= self.n);
+            assert(ni <= self.n);
                         
             % Get data according to the format
             if (self.format == Format.H_W_CH_N)
-                 self.db(:, :, :, si) = data;
+                 self.db(:, :, :, ni) = data;
             elseif (self.format == Format.H_W_CH_N_NP)
-                 self.db(:, :, :, si, pi) = data;
+                 self.db(:, :, :, ni, pi) = data;
             elseif (self.format == Format.H_N)
-                 self.db(:, si) = data;
+                 self.db(:, ni) = data;
             elseif (self.format == Format.H_N_NP)
-                 self.db(:, :, si, pi) = data;
+                 self.db(:, :, ni, pi) = data;
             end
         end
         

@@ -30,7 +30,7 @@ classdef DbSlice
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         % Public Interface
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        function [nndb_tr, nndb_tr_out, nndb_te, nndb_tr_cm] = slice(nndb, sel) 
+        function [nndbs_tr, nndbs_tr_out, nndbs_te, nndbs_tr_cm] = slice(nndb, sel) 
             % SLICE: slices the database according to the selection structure.
             % IMPL_NOTES: The new db will contain img at consecutive locations for duplicate indices
             % i.e Tr:[1 2 3 1], DB:[1 1 2 3]
@@ -65,17 +65,17 @@ classdef DbSlice
             %
             % Returns
             % -------
-            % nndb_tr : NNdb
-            %      Training dataset.
+            % nndbs_tr : cell- NNdb
+            %      Training datasets (Incase patch division is required).
             %
-            % nndb_tr_out : NNdb
-            %      Training target dataset.
+            % nndbs_tr_out : cell- NNdb
+            %      Training target datasets (Incase patch division is required).
             %
-            % nndb_te : NNdb
-            %      Testing target dataset.
+            % nndbs_te : cell- NNdb
+            %      Testing target datasets (Incase patch division is required).
             %
-            % nndb_tr_cm : NNdb
-            %      TODO: Yet to be documented.
+            % nndbs_tr_cm : cell- NNdb
+            %      TODO: Yet to be documenteds (Incase patch division is required).
             
             % Imports
             import nnf.db.DbSlice; 
@@ -90,6 +90,7 @@ classdef DbSlice
                 sel.tr_out_col_indices    = [];
                 sel.tr_cm_col_indices     = [];
                 sel.te_col_indices        = [];
+                sel.nnpatches             = [];
                 sel.use_rgb               = true;
                 sel.color_index           = [];                
                 sel.use_real              = false;
@@ -98,7 +99,7 @@ classdef DbSlice
                 sel.histeq                = false;
                 sel.histmatch             = false;
                 sel.class_range           = [];
-                sel.pre_process_script    = [];
+                sel.pre_process_script    = [];                
             end
 
             % Set defaults for selection fields, if the field does not exist            
@@ -107,6 +108,7 @@ classdef DbSlice
             if (~isfield(sel, 'tr_out_col_indices'));         sel.tr_out_col_indices= [];       end;
             if (~isfield(sel, 'tr_cm_col_indices'));          sel.tr_cm_col_indices = [];       end;
             if (~isfield(sel, 'te_col_indices'));             sel.te_col_indices    = [];       end;
+            if (~isfield(sel, 'nnpatches'));                  sel.nnpatches         = [];       end;
             if (~isfield(sel, 'use_rgb'));                    sel.use_rgb           = true;     end;
             if (~isfield(sel, 'color_index'));                sel.color_index       = [];       end;
             if (~isfield(sel, 'use_real'));                   sel.use_real          = false;    end;
@@ -145,10 +147,10 @@ classdef DbSlice
             % Initialize NNdb Objects
             type         = class(nndb.db);
             cls_n        = numel(cls_range);  
-            nndb_tr      = DbSlice.init_nndb('Training', type, sel, nndb, tr_n_per_class, cls_n, true);
-            nndb_te      = DbSlice.init_nndb('Testing', type, sel, nndb, te_n_per_class, cls_n, true);
-            nndb_tr_out  = DbSlice.init_nndb('Cannonical', type, sel, nndb, tr_out_n_per_class, cls_n, false);
-            nndb_tr_cm   = DbSlice.init_nndb('Cluster-Means', type, sel, nndb, tr_cm_n_per_class, cls_n, false);            
+            nndbs_tr     = DbSlice.init_nndb('Training', type, sel, nndb, tr_n_per_class, cls_n, true);
+            nndbs_te     = DbSlice.init_nndb('Testing', type, sel, nndb, te_n_per_class, cls_n, true);
+            nndbs_tr_out = DbSlice.init_nndb('Cannonical', type, sel, nndb, tr_out_n_per_class, cls_n, false);
+            nndbs_tr_cm  = DbSlice.init_nndb('Cluster-Means', type, sel, nndb, tr_cm_n_per_class, cls_n, false);            
                        
             % Fetch iterative range
             data_range = DbSlice.get_data_range(cls_range, nndb);
@@ -156,15 +158,23 @@ classdef DbSlice
             % Iterate over the cls_st indices
             j = 1;
             
+            % Patch count
+            patch_n = numel(sel.nnpatches);    
+                
             % Initialize the indices
-            tr_idx = 1; tr_out_idx = 1; tr_cm_idx = 1;
-            te_idx = 1;
+            tr_idxs = uint16(ones(1, patch_n));
+            tr_out_idxs = uint16(ones(1, patch_n));
+            tr_cm_idxs = uint16(ones(1, patch_n));
+            te_idxs = uint16(ones(1, patch_n));
             
             % PERF: Noise required indices (avoid find in each iteration)
             nf = find(sel.tr_noise_mask == 1);
-            
+          
+            % Iterate through images in nndb
             for i=data_range
-                img = nndb.get_data_at(i);
+                
+                % Colored image
+                cimg = nndb.get_data_at(i);                   
                             
                 % Update the current prev_cls_en
                 % Since 'i' may not be consecutive
@@ -174,62 +184,75 @@ classdef DbSlice
                 prev_cls_en = nndb.cls_st(j) - 1;
                 
                 % Checks whether current 'img' needs processing
-                f = DbSlice.find(nndb_tr, i, prev_cls_en, sel.tr_col_indices);
-                f = f | ~isempty(DbSlice.find(nndb_tr_out, i, prev_cls_en, sel.tr_out_col_indices));
-                f = f | ~isempty(DbSlice.find(nndb_tr_cm, i, prev_cls_en, sel.tr_cm_col_indices));
-                f = f | ~isempty(DbSlice.find(nndb_te, i, prev_cls_en, sel.te_col_indices));
+                f = (~isempty(nndbs_tr) && ~isempty(DbSlice.find(i, prev_cls_en, sel.tr_col_indices)));
+                f = f | (~isempty(nndbs_tr_out) && ~isempty(DbSlice.find(i, prev_cls_en, sel.tr_out_col_indices)));
+                f = f | (~isempty(nndbs_tr_cm) && ~isempty(DbSlice.find(i, prev_cls_en, sel.tr_cm_col_indices)));
+                f = f | (~isempty(nndbs_te) && ~isempty(DbSlice.find(i, prev_cls_en, sel.te_col_indices)));
                 if (~f); continue; end
-                
-                % Peform image operations only if db format comply them
-                if (nndb.format == Format.H_W_CH_N)
                     
-                    % Perform resize
-                    if (~isempty(sel.scale))
-                        img = imresize(img, sel.scale);     
-                    end
+                % Divide the img into patches
+                for pI=1:patch_n
+                    
+                    % Init variables
+                    nnpatch = sel.nnpatches(pI);
+                    x = nnpatch.offset(1);
+                    y = nnpatch.offset(2);                                                            
+                    w = nnpatch.w;
+                    h = nnpatch.h;
+                    
+                    % Extract the patch
+                    img = cimg(y:y+h-1, x:x+w-1, :);
+                
+                    % Peform image operations only if db format comply them
+                    if (nndb.format == Format.H_W_CH_N)
 
-                    % Perform histrogram matching against the cannonical image   
-                    cls_st_img        = [];
-                    if (sel.histmatch)
-                        if (~isempty(sel.scale))              
-                            cls_st = prev_cls_en + 1;                     
-                            cls_st_img = imresize(nndb.get_data_at(cls_st), selection.scale);
+                        % Perform resize
+                        if (~isempty(sel.scale))
+                            img = imresize(img, sel.scale);     
                         end
+
+                        % Perform histrogram matching against the cannonical image   
+                        cls_st_img        = [];
+                        if (sel.histmatch)
+                            if (~isempty(sel.scale))              
+                                cls_st = prev_cls_en + 1;                     
+                                cls_st_img = imresize(nndb.get_data_at(cls_st), selection.scale);
+                            end
+                        end
+
+                        % Color / Gray Scale Conversion (if required) 
+                        img = DbSlice.process_color(img, sel);
+                        cls_st_img = DbSlice.process_color(cls_st_img, sel);
+
+                        % Pre-Processing
+                        pp_params.histeq       = sel.histeq;
+                        pp_params.normalize    = sel.normalize;
+                        pp_params.histmatch    = sel.histmatch;
+                        pp_params.cann_img     = cls_st_img;
+                        img = im_pre_process(img, pp_params);
+
+                        % [CALLBACK] the specific pre-processing script
+                        if (~isempty(sel.pre_process_script))               
+                            img = sel.pre_process_script(img); 
+                        end                                       
                     end
-
-                    % Color / Gray Scale Conversion (if required) 
-                    img = DbSlice.process_color(img, sel);
-                    cls_st_img = DbSlice.process_color(cls_st_img, sel);
-
-                    % Pre-Processing
-                    pp_params.histeq       = sel.histeq;
-                    pp_params.normalize    = sel.normalize;
-                    pp_params.histmatch    = sel.histmatch;
-                    pp_params.cann_img     = cls_st_img;
-                    img = im_pre_process(img, pp_params);
-
-                    % [CALLBACK] the specific pre-processing script
-                    if (~isempty(sel.pre_process_script))               
-                        img = sel.pre_process_script(img); 
-                    end                                       
-                end
                         
-                % Build Training DB
-                [nndb_tr, tr_idx] = ...
-                    DbSlice.build_nndb_tr(nndb_tr, tr_idx, i, prev_cls_en, img, sel, nf);
-                
-                % Build Training Output DB
-                [nndb_tr_out, tr_out_idx] = ...
-                    DbSlice.build_nndb_tr_out(nndb_tr_out, tr_out_idx, i, prev_cls_en, img, sel);
+                    % Build Training DB
+                    [nndbs_tr, tr_idxs] = ...
+                        DbSlice.build_nndb_tr(nndbs_tr, pI, tr_idxs, i, prev_cls_en, img, sel, nf);
 
-                % Build Training Cluster Centers (For Multi Label DDA) DB
-                [nndb_tr_cm, tr_cm_idx] = ...
-                    DbSlice.build_nndb_tr_cm(nndb_tr_cm, tr_cm_idx, i, prev_cls_en, img, sel);
+                    % Build Training Output DB
+                    [nndbs_tr_out, tr_out_idxs] = ...
+                        DbSlice.build_nndb_tr_out(nndbs_tr_out, pI, tr_out_idxs, i, prev_cls_en, img, sel);
 
-                % Build Testing DB
-                [nndb_te, te_idx] = ...
-                    DbSlice.build_nndb_te(nndb_te, te_idx, i, prev_cls_en, img, sel);
-                
+                    % Build Training Cluster Centers (For Multi Label DDA) DB
+                    [nndbs_tr_cm, tr_cm_idxs] = ...
+                        DbSlice.build_nndb_tr_cm(nndbs_tr_cm, pI, tr_cm_idxs, i, prev_cls_en, img, sel);
+
+                    % Build Testing DB
+                    [nndbs_te, te_idxs] = ...
+                        DbSlice.build_nndb_te(nndbs_te, pI, te_idxs, i, prev_cls_en, img, sel);
+                end
             end            
         end
         
@@ -366,18 +389,18 @@ classdef DbSlice
     
 	methods (Access = private, Static) 
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        function [res] = init_nndb(name, type, sel, nndb, n_per_class, cls_n, build_cls_idx) 
+        function [new_nndbs] = init_nndb(name, type, sel, nndb, n_per_class, cls_n, build_cls_idx) 
             % INIT_NNDB: inits a new empty 4D tensor database with a nndb.
  
             % Imports
             import nnf.db.NNdb; 
             import nnf.db.Format;
             
-            res = [];
+            new_nndbs = cell(0, 1);
             
             % n_per_class: must be a scalar
             if (n_per_class == 0); return; end;
-            
+                           
             % Peform image operations only if db format comply them
             if (nndb.format == Format.H_W_CH_N || nndb.format == H_W_CH_N_NP)
             
@@ -395,28 +418,49 @@ classdef DbSlice
                 if (~(sel.use_rgb))
                     ch = numel(sel.color_index); % Selected color channels
                     if (ch == 0); ch = 1; end % Grayscale
-                end
-            
-                if (nndb.format == Format.H_W_CH_N)
-                    db = cast(zeros(nd1, nd2, ch, n_per_class*cls_n), type);
+                end                
+                
+                % Init Variables
+                db = cell(0, 1);
+                
+                if (~isempty(sel.nnpatches))
+%                     if (nndb.format == H_W_CH_N_NP); %  TODO: Remove type H_W_CH_N_NP
+%                         error('COMP_ERR: nndb is already in H_W_CH_N_NP format.');
+%                     end   
                     
-                else % (nndb.format == Format.H_W_CH_N_NP)
+                    % Patch count                    
+                    patch_n = numel(sel.nnpatches);                    
+                    
+                    % Init db for each patch
+                    for i=1:patch_n
+                        nnpatch = sel.nnpatches(i);
+                        db{i} = cast(zeros(nnpatch.h, nnpatch.w, ch, n_per_class*cls_n), type);
+                    end                                                     
+            
+                elseif (nndb.format == Format.H_W_CH_N)
+                    db{1} = cast(zeros(nd1, nd2, ch, n_per_class*cls_n), type);
+                    
+                else % (nndb.format == Format.H_W_CH_N_NP) TODO: Remove type H_W_CH_N_NP
                     assert(false); % TODO: Implement
-                    db = cast(zeros(nd1, nd2, ch, n_per_class*cls_n, nndb.p), type);
                 end
                     
             
             elseif (nndb.format == Format.H_N)
                 nd1 = nndb.h;
-                db = cast(zeros(nd1, n_per_class*cls_n), type);
+                db{1} = cast(zeros(nd1, n_per_class*cls_n), type);
             
+                % TODO: implement patch support
+                
             elseif (nndb.format == Format.H_N_NP)
                 nd1 = nndb.h;
                 assert(false); % TODO: Implement
-                db = cast(zeros(nd1, n_per_class*cls_n, nndb.p), type);                
+                db{1} = cast(zeros(nd1, n_per_class*cls_n, nndb.p), type);                
             end
             
-            res = NNdb(name, db, n_per_class, build_cls_idx);            
+            % Init nndb for each patch
+            for i=1:numel(db)
+                new_nndbs{i} = NNdb(name, db{i}, n_per_class, build_cls_idx); 
+            end
         end
 
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -471,16 +515,19 @@ classdef DbSlice
         end
 
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        function [nndb, db_idx] = build_nndb_tr(nndb, db_idx, i, prev_cls_en, img, sel, noise_found) 
+        function [nndbs, ni] = build_nndb_tr(nndbs, pi, ni, i, prev_cls_en, img, sel, noise_found) 
             % BUILD_NNDB_TR: builds the nndb training database.
                        
             % Imports 
             import nnf.db.DbSlice;
             import nnf.db.Format;
             import nnf.db.Noise;
-
-            % Find whether 'i' is in required indices                
-            found = DbSlice.find(nndb, i, prev_cls_en, sel.tr_col_indices);                
+             
+            if (isempty(nndbs)); return; end;
+            nndb = nndbs{pi};
+            
+            % Find whether 'i' is in required indices 
+            found = DbSlice.find(i, prev_cls_en, sel.tr_col_indices);                
             if (~found); return; end; 
             
             % Iterate over found indices
@@ -491,7 +538,7 @@ classdef DbSlice
                                         
                     % Currently supports noise for images only
                     if (nndb.format ~= Format.H_W_CH_N)
-                        nndb.set_data_at(img, db_idx); 
+                        nndb.set_data_at(img, ni(pi)); 
                         continue;
                     end
                                         
@@ -530,16 +577,16 @@ classdef DbSlice
                         end
                     end
 
-                    nndb.set_data_at(img, db_idx);
+                    nndb.set_data_at(img, ni(pi));
                 else
-                    nndb.set_data_at(img, db_idx);
+                    nndb.set_data_at(img, ni(pi));
                 end
 
-                db_idx = db_idx + 1;
+                ni(pi) = ni(pi) + 1;
             end
         end
         
-        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%        
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%        
         function img = rand_corrupt(height, width) 
             % RAND_CORRUPT: corrupts the image with a (height, width) block.
             
@@ -564,66 +611,72 @@ classdef DbSlice
         end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        function [nndb, db_idx] = build_nndb_tr_out(nndb, db_idx, i, prev_cls_en, img, sel) 
+        function [nndbs, ni] = build_nndb_tr_out(nndbs, pi, ni, i, prev_cls_en, img, sel) 
             % BUILD_NNDB_TR_OUT: builds the nndb training target database.
         
             % Imports 
             import nnf.db.DbSlice;
 
+            if (isempty(nndbs)); return; end;
+            nndb = nndbs{pi};
+            
             % Find whether 'i' is in required indices                
-            found = DbSlice.find(nndb, i, prev_cls_en, sel.tr_out_col_indices);                
+            found = DbSlice.find(i, prev_cls_en, sel.tr_out_col_indices);                
             if (~found); return; end; 
             
             % Iterate over found indices
             for j=1:numel(found)
-                nndb.set_data_at(img, db_idx);
-                db_idx = db_idx + 1;
+                nndb.set_data_at(img, ni(pi));
+                ni(pi) = ni(p1) + 1;
             end 
         end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        function [nndb, db_idx] = build_nndb_tr_cm(nndb, db_idx, i, prev_cls_en, img, sel) 
+        function [nndbs, ni] = build_nndb_tr_cm(nndbs, pi, ni, i, prev_cls_en, img, sel) 
             % BUILD_NNDB_TR_CM: builds the nndb training  mean centre database.
             
             % Imports 
             import nnf.db.DbSlice;
 
+            if (isempty(nndbs)); return; end;
+            nndb = nndbs{pi};
+            
             % Find whether 'i' is in required indices                
-            found = DbSlice.find(nndb, i, prev_cls_en, sel.tr_cm_col_indices);                
+            found = DbSlice.find(i, prev_cls_en, sel.tr_cm_col_indices);                
             if (~found); return; end; 
 
             % Iterate over found indices
             for j=1:numel(found)
-                nndb.set_data_at(img, db_idx);
-                db_idx = db_idx + 1;
+                nndb.set_data_at(img, ni(pi));
+                ni(pi) = ni(pi) + 1;
             end
         end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        function [nndb, db_idx] = build_nndb_te(nndb, db_idx, i, prev_cls_en, img, sel) 
+        function [nndbs, ni] = build_nndb_te(nndbs, pi, ni, i, prev_cls_en, img, sel) 
             % BUILD_NNDB_TE: builds the testing database.
             
             % Imports 
             import nnf.db.DbSlice;
 
+            if (isempty(nndbs)); return; end;
+            nndb = nndbs{pi};
+            
             % Find whether 'i' is in required indices                
-            found = DbSlice.find(nndb, i, prev_cls_en, sel.te_col_indices);                
+            found = DbSlice.find(i, prev_cls_en, sel.te_col_indices);                
             if (~found); return; end;  
                     
             % Iterate over found indices
             for j=1:numel(found)
-                nndb.set_data_at(img, db_idx);
-                db_idx = db_idx + 1;
+                nndb.set_data_at(img, ni(pi));
+                ni(pi) = ni(pi) + 1;
             end 
         end
         
       	%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        function [found] = find(nndb, i, prev_cls_en, col_indices)
-             % FIND: checks whether 'i' is in required indices
-             
-            found = [];             
-            if (isempty(nndb)); return; end; 
-            
+        function [found] = find(i, prev_cls_en, col_indices)
+            % FIND: checks whether 'i' is in required indices
+           
             % Find whether 'i' is in required indices
             found = find((mod(double(i)-double(col_indices), double(prev_cls_en)) == 0) == 1);  
         end

@@ -1,3 +1,21 @@
+
+import nnf.db.NNdb;
+import nnf.db.DbSlice;
+import nnf.db.NNPatch;
+
+nndb = NNdb('original', imdb_ar, 12, true);
+
+p1 = NNPatch(33, 33, [1 1]);
+p2 = NNPatch(33, 33, [34 1]);
+sel = [];
+sel.tr_col_indices = [1:2 4]; %[1 2 4]; 
+sel.nnpatches = [p1 p2];
+[nndbs_tr, ~, ~, ~] = DbSlice.slice(nndb, sel);
+           
+
+
+            
+
 % Import classes required for NNdb
 import nnf.db.NNdb;
 import nnf.db.DbSlice;
