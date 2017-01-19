@@ -19,8 +19,7 @@ classdef DbSlice
     % sel.normalize             = false;% Normalize (0 mean, std = 1)
     % sel.histeq                = false;% Histogram equalization
     % sel.histmatch             = false;% Histogram match (ref. image: first image of the class)
-    % sel.class_range           = [];   % Class range for all splits (tr, tr_out, te, val)
-    % sel.tr_class_range        = [];   % Class range for training database
+    % sel.class_range           = [];   % Class range for training database or all (tr, val, te)
     % sel.val_class_range       = [];   % Class range for validation database
     % sel.te_class_range        = [];   % Class range for testing database
     % sel.pre_process_script    = [];   % Custom preprocessing script
@@ -66,8 +65,7 @@ classdef DbSlice
             %       sel.normalize           = false;% Normalize (0 mean, std = 1)
             %       sel.histeq              = false;% Histogram equalization
             %       sel.histmatch           = false;% Histogram match (ref. image: first image of the class)
-            %       sel.class_range         = [];   % Class range for all splits (tr, tr_out, te, val)
-            %       sel.tr_class_range      = [];   % Class range for training database
+            %       sel.class_range         = [];   % Class range for training database or all (tr, val, te)            
             %       sel.val_class_range     = [];   % Class range for validation database
             %       sel.te_class_range      = [];   % Class range for testing database
             %       sel.pre_process_script  = [];   % Custom preprocessing script
@@ -114,7 +112,6 @@ classdef DbSlice
                 sel.histeq              = false;
                 sel.histmatch           = false;
                 sel.class_range         = [];
-                sel.tr_class_range      = [];
                 sel.val_class_range     = [];
                 sel.te_class_range      = [];
                 sel.pre_process_script  = [];                
@@ -136,7 +133,6 @@ classdef DbSlice
             if (~isfield(sel, 'histeq'));               sel.histeq              = false;    end;
             if (~isfield(sel, 'histmatch'));            sel.histmatch           = false;    end;
             if (~isfield(sel, 'class_range'));          sel.class_range         = [];       end;
-            if (~isfield(sel, 'tr_class_range'));       sel.tr_class_range      = [];       end;            
             if (~isfield(sel, 'val_class_range'));      sel.val_class_range     = [];       end;
             if (~isfield(sel, 'te_class_range'));       sel.te_class_range      = [];       end;
             if (~isfield(sel, 'pre_process_script'));   sel.pre_process_script  = [];       end;
@@ -147,7 +143,7 @@ classdef DbSlice
                 isempty(sel.val_col_indices) && ...
                 isempty(sel.val_out_col_indices) && ...
                 isempty(sel.te_col_indices))
-                error('ARG_ERR: [tr|tr_out|tr_cm|te]_col_indices: mandory field');
+                error('ARG_ERR: [tr|tr_out|val|val_out|te]_col_indices: mandory field');
             end            
             if (sel.use_rgb && ~isempty(sel.color_index))
                 error('ARG_CONFLICT: sel.use_rgb, sel.color_index');
@@ -163,14 +159,15 @@ classdef DbSlice
             val_out_n_per_class = numel(sel.val_out_col_indices);
             te_n_per_class      = numel(sel.te_col_indices);
 
-            cls_range              = sel.class_range;
+            % Set defaults for class range (tr or tr, val, te)
+            cls_range           = sel.class_range;
             if (isempty(cls_range))
                 cls_range = 1:nndb.cls_n;
             end   
             
-            % Set defaults for class ranges
+            % Set defaults for other class ranges (val, te)
             val_cls_range = sel.val_class_range;
-            te_cls_range =  sel.te_class_range;
+            te_cls_range = sel.te_class_range;
             if (isempty(sel.val_class_range)); val_cls_range = cls_range; end
             if (isempty(sel.te_class_range)); te_cls_range = cls_range; end
             
@@ -209,10 +206,7 @@ classdef DbSlice
           
             % Iterate through images in nndb
             for i=data_range
-                
-                % Colored image
-                cimg = nndb.get_data_at(i);                   
-                            
+         
                 % Update the current prev_cls_en
                 % Since 'i' may not be consecutive
                 while ((numel(nndb.cls_st) >= (i_cls+1)) && (i >= nndb.cls_st(i_cls+1)))
@@ -221,18 +215,17 @@ classdef DbSlice
                 prev_cls_en = nndb.cls_st(i_cls) - 1;
                 
                 % Checks whether current 'img' needs processing
-%                 f = (~isempty(nndbs_tr) && ~isempty(DbSlice.find(i, prev_cls_en, sel.tr_col_indices)));
-%                 f = f | (~isempty(nndbs_tr_out) && ~isempty(DbSlice.find(i, prev_cls_en, sel.tr_out_col_indices)));
-%                 f = f | (~isempty(nndbs_val) && ~isempty(DbSlice.find(i, prev_cls_en, sel.val_col_indices)));
-%                 f = f | (~isempty(nndbs_te) && ~isempty(DbSlice.find(i, prev_cls_en, sel.te_col_indices)));                
+                p = ~DbSlice.dicard_needed(nndbs_tr, i, i_cls, cls_range, prev_cls_en, sel.tr_col_indices);
+                p = p | ~DbSlice.dicard_needed(nndbs_tr_out, i, i_cls, cls_range, prev_cls_en, sel.tr_out_col_indices);
+                p = p | ~DbSlice.dicard_needed(nndbs_val, i, i_cls, val_cls_range, prev_cls_en, sel.val_col_indices);
+                p = p | ~DbSlice.dicard_needed(nndbs_val_out, i, i_cls, val_cls_range, prev_cls_en, sel.val_out_col_indices);
+                p = p | ~DbSlice.dicard_needed(nndbs_te, i, i_cls, te_cls_range, prev_cls_en, sel.te_col_indices);
+                if (~p); continue; end
+                                    
+                % Color image
+                cimg = nndb.get_data_at(i); 
                 
-                f = ~DbSlice.dicard_needed(nndbs_tr, i, i_cls, cls_range, prev_cls_en, sel.tr_col_indices);
-                f = f | ~DbSlice.dicard_needed(nndbs_tr_out, i, i_cls, cls_range, prev_cls_en, sel.tr_out_col_indices);
-                f = f | ~DbSlice.dicard_needed(nndbs_val, i, i_cls, val_cls_range, prev_cls_en, sel.val_col_indices);
-                f = f | ~DbSlice.dicard_needed(nndbs_val_out, i, i_cls, val_cls_range, prev_cls_en, sel.val_out_col_indices);
-                f = f | ~DbSlice.dicard_needed(nndbs_te, i, i_cls, te_cls_range, prev_cls_en, sel.te_col_indices);
-                if (~f); continue; end
-                    
+                
                 % Iterate through image patches
                 for pI=1:patch_loop_max_n 
                     
@@ -308,12 +301,17 @@ classdef DbSlice
             end              
             
             % Returns NNdb object instead of cell array (non patch requirement)
-            if (isempty(sel.nnpatches))
+            if (isempty(sel.nnpatches))               
                 if (~isempty(nndbs_tr)); nndbs_tr = nndbs_tr{1}; end
-                if (~isempty(nndbs_tr_out)); nndbs_tr_out = nndbs_tr_out{1}; end
+                if (~isempty(nndbs_val)); nndbs_val = nndbs_val{1}; end                
                 if (~isempty(nndbs_te)); nndbs_te = nndbs_te{1}; end
-                if (~isempty(nndbs_val)); nndbs_val = nndbs_val{1}; end
-                if (~isempty(nndbs_val_out)); nndbs_val_out = nndbs_val_out{1}; end                
+                if (~isempty(nndbs_tr_out)); nndbs_tr_out = nndbs_tr_out{1}; end
+                if (~isempty(nndbs_val_out)); nndbs_val_out = nndbs_val_out{1}; end
+                if (isempty(nndbs_tr)); nndbs_tr = []; end
+                if (isempty(nndbs_val)); nndbs_val = []; end                
+                if (isempty(nndbs_te)); nndbs_te = []; end
+                if (isempty(nndbs_tr_out)); nndbs_tr_out = []; end
+                if (isempty(nndbs_val_out)); nndbs_val_out = []; end  
             end                
         end       
    
@@ -546,7 +544,7 @@ classdef DbSlice
             
             new_nndbs = cell(0, 1);
             
-            % n_per_class: must be a scalar
+            % n_per_class: must be a scalar for this method
             if (n_per_class == 0); return; end;
                 
             % Init Variables
