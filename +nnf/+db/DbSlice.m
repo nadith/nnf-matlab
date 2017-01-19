@@ -613,7 +613,7 @@ classdef DbSlice
             cls_range = union(union(cls_range, val_cls_range), te_cls_range);
             
             % Union of all col indices
-            col_indices = union(union(union(union(tr_col, tr_out_col), val_col), val_out_col), te_col)
+            col_indices = union(union(union(union(tr_col, tr_out_col), val_col), val_out_col), te_col);
             
             % Total class count
             cls_n = numel(cls_range);
