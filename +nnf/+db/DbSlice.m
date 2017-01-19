@@ -299,7 +299,7 @@ classdef DbSlice
 
                     % Build Valdiation Target DB
                     [nndbs_val_out, val_out_idxs] = ...
-                        DbSlice.build_nndb_val(nndbs_val_out, pI, val_out_idxs, i, i_cls, val_cls_range, prev_cls_en, img, sel);
+                        DbSlice.build_nndb_val_out(nndbs_val_out, pI, val_out_idxs, i, i_cls, val_cls_range, prev_cls_en, img, sel);
                     
                     % Build Testing DB
                     [nndbs_te, te_idxs] = ...
@@ -861,7 +861,7 @@ classdef DbSlice
             nndb = nndbs{pi};
             
             % Find whether 'i' is in required indices                
-            [discard, found] = DbSlice.dicard_needed(nndbs, i, i_cls, cls_range, prev_cls_en, sel.val_col_indices);                
+            [discard, found] = DbSlice.dicard_needed(nndbs, i, i_cls, cls_range, prev_cls_en, sel.val_out_col_indices);                
             if (discard); return; end; 
 
             % Iterate over found indices
