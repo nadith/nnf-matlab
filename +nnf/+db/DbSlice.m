@@ -185,7 +185,10 @@ classdef DbSlice
             nndbs_te     = DbSlice.init_nndb('Testing', type, sel, nndb, te_n_per_class, numel(te_cls_range), true);
                        
             % Fetch iterative range
-            data_range = DbSlice.get_data_range(cls_range, val_cls_range, te_cls_range, nndb);
+            data_range = DbSlice.get_data_range(cls_range, val_cls_range, te_cls_range, ...
+                            sel.tr_col_indices, sel.tr_out_col_indices, ...
+                            sel.val_col_indices, sel.val_out_col_indices, ...
+                            sel.te_col_indices, nndb);
            
             % Iterate over the cls_st indices (i_cls => current cls index)
             i_cls = 1;
@@ -598,7 +601,8 @@ classdef DbSlice
         end
 
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        function data_range = get_data_range(cls_range, val_cls_range, te_cls_range, nndb) 
+        function data_range = get_data_range(cls_range, val_cls_range, te_cls_range, ...
+                                    tr_col, tr_out_col, val_col, val_out_col, te_col, nndb) 
             % GET_DATA_RANGE: fetches the data_range (images indices).          
             %            
             % Returns
@@ -610,23 +614,26 @@ classdef DbSlice
             % Union of all class ranges
             cls_range = union(union(cls_range, val_cls_range), te_cls_range);
             
+            % Union of all col indices
+            col_indices = union(union(union(union(tr_col, tr_out_col), val_col), val_out_col), te_col)
+            
             % Total class count
             cls_n = numel(cls_range);
             
             % *Ease of implementation
             % Allocate more memory, shrink it later
-            data_range = uint32(zeros(1, cls_n * max(nndb.n_per_class)));   
+            data_range = uint32(zeros(1, cls_n * numel(col_indices)));   
                        
             st = 1;
             for i = 1:cls_n
                 ii = cls_range(i);
                 dst = nndb.cls_st(ii);
-                data_range(st:st+nndb.n_per_class(ii)-1) = ...
-                    dst:dst + uint32(nndb.n_per_class(ii)) - 1;                
-                st = st + nndb.n_per_class(ii);                
+                
+                data_range(st:st+numel(col_indices)-1) = uint32(col_indices) + (dst-1);               
+                st = st + numel(col_indices);              
             end
             
-            % Shrink the vector
+            % Shrink the vector (Can safely ignore this code)
             data_range(st:end) = [];
         end
          
