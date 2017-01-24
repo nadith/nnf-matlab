@@ -1,7 +1,7 @@
-function [ img ] = im_pre_process(img, params)
+function [ img ] = im_pre_process( img, params)
 %IM_PRE_PROCESS pre-process the image.
-
-% Copyright 2015-2016 Nadith Pathirage, Curtin University.
+    % Imports
+    import nnf.pp.*;
 
     if (~isfield(params, 'histeq')); params.histeq = false; end
     if (~isfield(params, 'normalize')); params.normalize = false; end
@@ -9,26 +9,20 @@ function [ img ] = im_pre_process(img, params)
     if (~isfield(params, 'cann_img')); params.cann_img = []; end
 
     if (params.histeq)
-        if (size(img, 3) == 3)
-            img = histeqRGB(img);
-        else
-            img = histeq(img);
-        end
+        img = hist_eq_ch(img, params.ch_axis);
     end
 
-    if (params.normalize)        
-        img = bsxfun(@minus, double(img), mean(mean(img))); 
-        img = bsxfun(@rdivide, double(img), std(std(img))); 
-    %         means = mean(mean(low_dim_img));
-    %         for i=1:numel(means)
-    %             img(:, :, i) = img(:, :, i) - means(i);
-    %         end
-    end
+    % TODO: dtype changes
+    % if (params.normalize)        
+    %     img = bsxfun(@minus, double(img), mean(mean(img)));        
+    % %         means = mean(mean(low_dim_img));
+    % %         for i=1:numel(means)
+    % %             low_dim_img(:, :, i) = low_dim_img(:, :, i) - means(i);
+    % %         end
+    % end
     
     % Histrogram matching
-    if (params.histmatch && ~isempty(params.cann_img))            
-        img = histmatch(params.cann_img, img);
-    end
-        
+    if (params.histmatch && ~isempty(params.cann_img))
+        img = hist_match_ch(img, params.cann_img, params.ch_axis);
+    end        
 end
-

@@ -1,5 +1,5 @@
 classdef Format
-    %NNDBFORMAT Enumeration describes the format of the NNdb database.    
+    %FORMAT Enumeration describes the format of the NNdb database.
     enumeration      
         H_W_CH_N,     % =0 Height x Width x Channels x Samples (image db format) 
         H_N,          % Height x Samples

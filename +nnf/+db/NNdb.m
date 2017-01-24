@@ -25,6 +25,7 @@ classdef NNdb < handle
         
         n_per_class;    % (v) No of images per class (classes may have different no. of images)  
         cls_st;         % (v) Class Start Index  (internal use, can be used publicly)
+        build_cls_lbl   % (s) Build the class labels or not.
         cls_lbl;        % (v) Class Index Array
         cls_n;          % (s) Class Count
   	end
@@ -33,6 +34,7 @@ classdef NNdb < handle
         matlab_db;      % Matlab Compatible db Format
         python_db;      % Python Compatible db Format
         features;
+        im_ch_axis;     % Image channel axis
     end
             
     methods (Access = public) 
@@ -64,7 +66,7 @@ classdef NNdb < handle
             
             % Imports
             import nnf.db.Format; 
-            
+                        
             % Set defaults for arguments
             if (nargin < 3), n_per_class = []; end
             if (nargin < 4), build_cls_lbl = false; end
@@ -75,73 +77,118 @@ classdef NNdb < handle
             if (isscalar(cls_lbl))
                 error('ARG_ERR: cls_lbl: vector indicating class for each sample');
             end
+            
+            if (isempty(db))
+                self.db = []; 
+                self.n_per_class = [];
+                self.build_cls_lbl = build_cls_lbl;
+                self.cls_lbl = cls_lbl;
+                self.format = format;
+                self.h = 0; self.w = 1; self.ch = 1; self.n = 0;                
+                self.cls_st = [];                
+                self.cls_n = 0;
+                return
+            end
                         
             % Set values for instance variables
             self.set_db(db, n_per_class, build_cls_lbl, cls_lbl, format);
         end
-        
+      
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%        
+        function init_db_fields(self)
+            import nnf.db.Format;
+            
+            if (self.format == Format.H_W_CH_N)
+                [self.h, self.w, self.ch, self.n] = size(self.db);
+
+            elseif (self.format == Format.H_N)
+                self.w = 1;
+                self.ch = 1;
+                [self.h, self.n] = size(self.db);
+
+            elseif (self.format == Format.N_H_W_CH)
+                [self.n, self.h, self.w, self.ch] = size(self.db);
+
+            elseif (self.format == Format.N_H)
+                self.w = 1;
+                self.ch = 1;
+                [self.n, self.h] = size(self.db);
+            end
+        end
+            
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        function data = get_data_at(self, ni) 
+        function data = get_data_at(self, si) 
             % GET_DATA_AT: gets data from database at i.
             %
             % Parameters
             % ----------
             % si : int
             %     Sample index.
-            % 
-            % pi : int, optional
-            %     Patch index. Only used when needed.
-            % 
+            %             
             
             % Imports
             import nnf.db.Format;
             
             % Error handling for arguments
-            assert(ni <= self.n);            
+            assert(si <= self.n);            
                         
             % Get data according to the format
             if (self.format == Format.H_W_CH_N)
-                data = self.db(:, :, :, ni);
+                data = self.db(:, :, :, si);
             elseif (self.format == Format.H_N)
-                data = self.db(:, ni);
+                data = self.db(:, si);
             elseif (self.format == Format.N_H_W_CH)
-                data = self.db(ni, :, :, :);
+                data = self.db(si, :, :, :);
             elseif (self.format == Format.N_H)
-                data = self.db(ni, :);
+                data = self.db(si, :);
             end
         end
         
        	%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        function set_data_at(self, data, ni) 
-            % SET_DATA_AT: sets data in database at i.
+        function add_data(self, data) 
+            % ADD_DATA: adds data into the database.
             %
             % Parameters
             % ----------
-            % data : int
-            %     Data to be set.
+            % data : `array_like`
+            %     Data to be added.
             %
-            % si : int
-            %     Sample index.
-            % 
-            % pi : int, optional
-            %     Patch index. Only used when needed.
+            % Notes
+            % -----
+            % Dynamic allocation for the data tensor.
             % 
             
             % Imports
             import nnf.db.Format;
-            
-            % Error handling for arguments
-            assert(ni <= self.n);
-                        
-            % Get data according to the format
-            if (self.format == Format.H_W_CH_N)
-                self.db(:, :, :, ni) = data;
+
+            % Add data according to the format (dynamic allocation)
+            if (self.format == Format.H_W_CH_N)                
+                if (isempty(self.db))
+                    self.db = data;
+                else
+                    self.db = cat(4, self.db, data);
+                end
+
             elseif (self.format == Format.H_N)
-                self.db(:, ni) = data;
+                if (isempty(self.db))
+                    self.db = data;
+                else
+                    self.db = cat(2, self.db, data);
+                end               
+
             elseif (self.format == Format.N_H_W_CH)
-                self.db(ni, :, :, :) = data
+                if (isempty(self.db))
+                    self.db = data;
+                else
+                    self.db = cat(1, self.db, data);
+                end 
+
             elseif (self.format == Format.N_H)
-            	self.db(ni, :) = data
+                if (isempty(self.db))
+                    self.db = data;
+                else
+                    self.db = cat(1, self.db, data);
+                end 
             end
         end
         
@@ -229,6 +276,7 @@ classdef NNdb < handle
             % Set values for instance variables
             self.db     = db;
             self.format = format;
+            self.build_cls_lbl = build_cls_lbl;
             
             % Set h, w, ch, np according to the format    
             if (format == Format.H_W_CH_N)
@@ -580,9 +628,43 @@ classdef NNdb < handle
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         function value = get.features(self) 
             % 2D Feature Matrix (double)
+            import nnf.db.Format;
             
-            value = double(reshape(self.db, self.h * self.w * self.ch, self.n));
+            % N x H x W x CH or N x H
+            if (self.format == Format.N_H_W_CH || self.format == Format.N_H)
+                value = double(reshape(self.db, self.n, self.h * self.w * self.ch));
+            
+            % H x W x CH x N or H x N
+            elseif (self.format == Format.H_W_CH_N || self.format == Format.H_N)
+                value = double(reshape(self.db, self.h * self.w * self.ch, self.n));
+
+            else
+                error('Unsupported db format')
+            end
         end  
+        
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        function value = get.im_ch_axis(self) 
+            % Get image channel index for an image.
+            % 
+            % Exclude the sample axis.
+            %
+               
+            % Imports
+            import nnf.db.Format;
+            
+            if (self.format == Format.H_W_CH_N)
+                value = 3;
+            elseif (self.format == Format.H_N)
+                value = 0;
+            elseif (self.format == Format.N_H_W_CH)
+                value = 3;
+            elseif (self.format == Format.N_H)
+                value = 0;
+            else
+                error('Unsupported db format')
+            end
+        end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     end

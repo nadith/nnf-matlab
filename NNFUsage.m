@@ -1,22 +1,23 @@
 % Import classes required for NNdb
 import nnf.db.NNdb;
 import nnf.db.DbSlice;
+import nnf.db.Selection;
 
 % Import all algorithms in alg package
 import nnf.alg.*;
 
 % Create a NNdb database with AR database (12 images per identity)
 nndb = NNdb('original', imdb_ar, 12, true);
-sel = [];
-sel.tr_col_indices        = [1:3 7:12]; % [1 2 3 7 8 9 10 11 12]; 
-sel.te_col_indices        = [4:6]; % [4 5 6];
-sel.use_rgb               = false;              
-sel.scale                 = 0.5;
-sel.histeq                = true;
-sel.class_range           = [1:36 61:76 78:100];
-sel.vectorize_db          = false;
-[nndb_tr, ~, nndb_te, ~]  = DbSlice.slice(nndb, sel); 
-
+sel = Selection();
+sel.tr_col_indices        = [1:8]; % [1 2 3 7 8 9 10 11 12]; 
+sel.te_col_indices        = [9:12]; % [4 5 6];
+sel.use_rgb               = true;              
+sel.scale                 = 1;
+sel.histeq                = false;
+sel.class_range           = [7:10];
+[nndb_tr, ~, nndb_te, ~, ~, ~, ~] = DbSlice.slice(nndb, sel); 
+nndb_tr.show(10, 8)
+figure, nndb_te.show(10, 4)
 % help DbSlice.examples % For extensive help on Db slicing
 
 %% PCA_L2
