@@ -13,14 +13,22 @@ addpath (base_path);
 % Add path to matlab (recursive): current workspace 
 global w_path;
 w_path = [base_path '/' w_folder];
+
+ % Add the current working directory to path
+addpath (w_path);
 infos = dir(w_path);
 for i=1:numel(infos)                
     name = infos(i).name;
     % Exclude these items in the current iteraing directory
-    if (strcmp(name, '.') || strcmp(name, '..') || name(1) == '.' || strcmp(name, '_other'))
+    if (strcmp(name, '.') || strcmp(name, '..') || ...
+        name(1) == '.' || strcmp(name, '_other') || strcmp(name, '+nnf'))
         continue;
     end
-    addpath (genpath (name));                       
+    
+    % Add only directories to the path
+    if (infos(i).isdir)
+        addpath(genpath ([w_path '/' name]));
+    end
 end
 
 % Add path to matlab (recursive): selective external libs
@@ -66,7 +74,7 @@ env_load_im_db('imdb_mp', [imdb_path '/IMDB_66_66_MP_33.mat']);
 imdb_path = 'F:/#Research Data/FaceDB';
 
 % ORL Database
-env_load_im_db('imdb_mp', [imdb_path '/IMDB_64_64_ORL_8.mat']);
+env_load_im_db('imdb_orl', [imdb_path '/IMDB_64_64_ORL_8.mat']);
 
 % YaleB
 env_load_im_db('imdb_yaleb', [imdb_path '/IMDB_66_58_YALEB_64.mat']);
@@ -86,6 +94,9 @@ env_load_im_db('imdb_lfw', [imdb_path '/IMDB_64_64_LFW_SLINDA_9.mat']);
 
 % Clear unnecessary variables
 %clear wlib_path;
+clear i;
+clear infos;
+clear name;
 clear base_path;
 clear w_folder;
 clear w_path;
