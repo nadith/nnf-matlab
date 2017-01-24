@@ -219,7 +219,7 @@ classdef LDA < nnf.alg.MCC
         end
 
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-      	function W = D2_l2(nndb, info) 
+      	function W = l2_2D(nndb, info) 
             % D2_L2: performs 2D-LDA.
             % TODO: Implement
             

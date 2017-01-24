@@ -47,35 +47,42 @@ classdef SRC
             % accuracy = SRC.l1(nndb_g, nndb_p)
             % 
             
+            % Imports
+            import nnf.alg.SRC;
+            
             % Set defaults for arguments
             if (nargin < 3), info = []; end
             
             % Set defaults for info fields, if the field does not exist  
             if (~isfield(info,'lambda')); info.lambda = 0.01; end; 
             
+            coeff = SRC.train_lasso(nndb_g.features, nndb_p.features, info.lambda, 0, 0);
+            accuracy = SRC.lass_recogn(nndb_g.features, nndb_p.features, nndb_g.cls_lbl', nndb_p.cls_lbl', coeff, 2, 0, 0);
+                        
+            % TODO:
             %
             % Model selection (with different lambda)
             % [param,maxAcc]=lineSearchSRC2(trainSet,trainClass);
             % option.lambda=param;
             %
             
-            % TODO: Troubleshoot POSTIVE DEFNITE error 
-            % optionSRC1.rubost = true; % SRC1
-            %[testClassPredicted, sparsity, otherOutput] = src(trainSet, nndb_g.cls_lbl', testSet, optionSRC2);
-            
-            % SRC2 for overcomplete representations
-            optionSRC2.lambda = info.lambda;
-            optionSRC2.method = 'interiorPoint';
-
-            % Normalization, before applying SRC algorihm
-            [testClassPredicted, sparsity, otherOutput] = ...
-                SRC2(normc(nndb_g.features), nndb_g.cls_lbl', normc(nndb_p.features), optionSRC2);
-            
-            % Addition information on residuals
-            % residualSRC2 = otherOutput; % regression residuals
-            
-            % Calculate accuracy
-            accuracy = (sum(testClassPredicted == nndb_p.cls_lbl')/nndb_p.n)* 100;                        
+%             % TODO: Troubleshoot POSTIVE DEFNITE error 
+%             % optionSRC1.rubost = true; % SRC1
+%             %[testClassPredicted, sparsity, otherOutput] = src(trainSet, nndb_g.cls_lbl', testSet, optionSRC2);
+%             
+%             % SRC2 for overcomplete representations
+%             optionSRC2.lambda = info.lambda;
+%             optionSRC2.method = 'interiorPoint';
+% 
+%             % Normalization, before applying SRC algorihm
+%             [testClassPredicted, sparsity, otherOutput] = ...
+%                 SRC2(normc(nndb_g.features), nndb_g.cls_lbl', normc(nndb_p.features), optionSRC2);
+%             
+%             % Addition information on residuals
+%             % residualSRC2 = otherOutput; % regression residuals
+%             
+%             % Calculate accuracy
+%             accuracy = (sum(testClassPredicted == nndb_p.cls_lbl')/nndb_p.n)* 100;                        
         end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -86,10 +93,40 @@ classdef SRC
     
     methods (Access = private, Static) 
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        % IMPLEMENTATION 1
-        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%        
-        function [A, B] = PreProcess(A, B, pca)
-        % TODO: Remove this method and incorporate it to NNdb class
+        % IMPLEMENTATION 1:
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        function X = src_normalize(X)
+            temp = sqrt(sum(X.^2,1));
+            for i = 1 : size(X,2)
+                X(:,i) = X(:,i)/temp(i);
+            end;
+            return;
+        end
+
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        function [ lamda ] = find_lambda(R, E, gr)
+            [nTestSmp] = size(E, 2);
+            groups = unique(gr);
+            numGroups = length(groups);
+
+            lamda = zeros(nTestSmp,1);
+
+            for i = 1 : nTestSmp
+                y = E(:,i);
+                R_group_norm = zeros(numGroups, 1);
+                for j = 1 : numGroups
+                    temp = R(:,gr == groups(j));
+
+                    %R_group_norm(j) = norm(temp'*y); %6 / 7 / 2012
+                    R_group_norm(j) = max(abs(temp'*y));
+                end
+                lamda(i) = max(R_group_norm);
+            end
+        end
+
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        function [A, B] = pre_process(A, B, pca)
+            % TODO: Remove this method and incorporate it to NNdb class
             [~,d1] = size(A);
             [~,d2] = size(B);
 
@@ -97,34 +134,94 @@ classdef SRC
             A = A - repmat(m, [1,d1]);
             B = B - repmat(m, [1,d2]);
 
-            A = src_normalize(A);
-            B = src_normalize(B);
+            % Imports
+            import nnf.alg.SRC;
+            
+            A = SRC.src_normalize(A);
+            B = SRC.src_normalize(B);
 
             if (pca > 0)
                 v = zPCA(A, pca); %? missing
                 A = v'*A;
                 B = v'*B;
             end
-
         end
 
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        function x = src_lasso(D, B, lamda, pca, error) 
-       
-            if (error) % For handling the occlusion or error with SRC
+        function x = train_lasso(D, B, lamda, pca, error) 
+
+            % Imports
+            import nnf.alg.SRC;
+
+            % For handling the occlusion or error with SRC
+            if (error)
                 dim1 = size(D, 1);
                 D = [D eye(dim1)]; 
             end 
 
-            [D, B] = PreProcess(D, B, pca);
+            [D, B] = SRC.pre_process(D, B, pca);
             
             te_n = size(B, 2);
             x = zeros(size(D,2), te_n);
             for i = 1 : te_n
-                x(:, i) = lasso_ADMM(D, B(:,i), lamda, 1, 1);
+                x(:, i) = SRC.lasso_ADMM(D, B(:,i), lamda, 1, 1);
             end
         end
-        
+
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        function [ rate, label, dist_matrix ] = lass_recogn(R,E,lr,le, xx, p, pca, error )
+
+            % Imports
+            import nnf.alg.SRC;
+            
+            if (error) % For handling the occlusion or error with SRC
+                dim1 = size(R, 1);
+                R = [R eye(dim1)]; 
+            end
+
+            [R,E] = SRC.pre_process(R,E,pca);
+
+            d = size(xx,2); % No. of test samples
+            rate = zeros(1,d);
+            label = zeros(1,d);
+            idGroup = unique(lr(1,:)); idNum = length(idGroup);    
+            dist_matrix = zeros(idNum, d); % IMPORTANT: Consider only the the 1st image of each class in the gallery.
+
+            for i = 1 : d
+                x = xx(:,i);        
+                [temp, dist_matrix(:, i), ~] = SRC.src(R,E(:,i),lr(1,:),x,p);        
+                label(i) = temp(1);
+                rate(i) = label(i) == le(1,i);
+            end
+            rate = sum(rate)/d;
+        end
+
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        function [ ly, residuals,r ] = src(R, y, lrid, x, p)
+        %  label = label(min(||y - R * xi||^2))
+            % initiallization
+            idGroup = unique(lrid);
+            idNum = length(idGroup);
+            residuals = zeros(idNum,1);
+
+            % generate coefficients for each group
+            xx = repmat(x,[1,idNum]);
+            for i = 1 : idNum
+                idx = lrid ~= idGroup(i);
+                xx(idx,i) = 0;
+            end
+
+            % using the coefficients to calculate residuals
+            r = repmat(y, [1, idNum]) - R*xx;
+            for i = 1 : idNum
+                residuals(i) = norm(r(:, i), p);
+            end
+
+            % find y's label that corresponding to the minimal residual
+            ly = idGroup(min(residuals)==residuals);
+            ly = ly(1);  
+        end
+
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         function [z, history] = lasso_ADMM(A, b, lambda, rho, alpha) 
             % lasso  Solve lasso problem via ADMM
@@ -151,6 +248,9 @@ classdef SRC
             % http://www.stanford.edu/~boyd/papers/distr_opt_stat_learning_admm.html
             %
 
+            % Imports
+            import nnf.alg.SRC;
+            
             t_start = tic;
 
             %% Global constants and defaults
@@ -174,7 +274,7 @@ classdef SRC
             u = zeros(n,1);
 
             % cache the factorization
-            [L U] = factor(A, rho);
+            [L U] = SRC.factor(A, rho);
 
             if ~QUIET
                 fprintf('%3s\t%10s\t%10s\t%10s\t%10s\t%10s\n', 'iter', ...
@@ -194,13 +294,13 @@ classdef SRC
                 % z-update with relaxation
                 zold = z;
                 x_hat = alpha*x + (1 - alpha)*zold;
-                z = shrinkage(x_hat + u, lambda/rho);
+                z = SRC.shrinkage(x_hat + u, lambda/rho);
 
                 % u-update
                 u = u + (x_hat - z);
 
                 % diagnostics, reporting, termination checks
-                history.objval(k)  = objective(A, b, lambda, x, z);
+                history.objval(k)  = SRC.objective(A, b, lambda, x, z);
 
                 history.r_norm(k)  = norm(x - z);
                 history.s_norm(k)  = norm(-rho*(z - zold));
@@ -251,8 +351,6 @@ classdef SRC
             U = sparse(L');
         end
 
-        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        % IMPLEMENTATION 1 END
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     end
     
