@@ -54,12 +54,11 @@ classdef Selection
         te_class_range      % Class range for testing database
         pre_process_script  % Custom preprocessing script
     end
-        
-        
+
     methods (Access = public) 
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     % Public Interface
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     function self = Selection()
         % Constructs :obj:`Selection` instance.
 
@@ -84,9 +83,33 @@ classdef Selection
         self.pre_process_script  = [];      % Custom preprocessing script
     end
 
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    function sel = clone(self)
+        sel = Selection();
+        sel.tr_col_indices      = self.tr_col_indices;
+        sel.tr_noise_rate       = self.tr_noise_rate;
+        sel.tr_out_col_indices  = self.tr_out_col_indices;
+        sel.val_col_indices     = self.val_col_indices;
+        sel.val_out_col_indices = self.val_out_col_indices;
+        sel.te_col_indices      = self.te_col_indices;
+        sel.te_out_col_indices  = self.te_out_col_indices;
+        sel.nnpatches           = self.nnpatches;
+        sel.use_rgb             = self.use_rgb;
+        sel.color_indices       = self.color_indices;
+        sel.use_real            = self.use_real;
+        sel.scale               = self.scale;
+        sel.normalize           = self.normalize;
+        sel.histeq              = self.histeq;
+        sel.histmatch_col_index = self.histmatch_col_index;
+        sel.class_range         = self.class_range;
+        sel.val_class_range     = self.val_class_range;
+        sel.te_class_range      = self.te_class_range;
+        sel.pre_process_script  = self.pre_process_script;
+    end
+
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     % Protected Interface
-    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     function iseq = eq(self, sel)
         %{
         Equality of two :obj:`ImagePreProcessingParam` instances.
@@ -134,5 +157,6 @@ classdef Selection
             if (~iseq); break; end
         end       
     end
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     end
 end

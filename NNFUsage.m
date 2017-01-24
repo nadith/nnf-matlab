@@ -11,10 +11,10 @@ nndb = NNdb('original', imdb_ar, 12, true);
 sel = Selection();
 sel.tr_col_indices        = [1:8]; % [1 2 3 7 8 9 10 11 12]; 
 sel.te_col_indices        = [9:12]; % [4 5 6];
-sel.use_rgb               = true;              
+sel.use_rgb               = false;              
 sel.scale                 = 1;
-sel.histeq                = false;
-sel.class_range           = [7:10];
+sel.histeq                = true;
+sel.class_range           = [1:100];
 [nndb_tr, ~, nndb_te, ~, ~, ~, ~] = DbSlice.slice(nndb, sel); 
 nndb_tr.show(10, 8)
 figure, nndb_te.show(10, 4)
@@ -126,7 +126,7 @@ info.ReducedDim = 599;
 nndb_tr = DbSlice.slice(nndb, sel);
 nndb_lle = LLE.do(nndb_tr, info);
 
-sel = [];
+sel = Selection();
 sel.tr_col_indices = [1 2 4 8 9 11];
 sel.te_col_indices = [3 5 6 7 10 12];
 [ nndb_tr, ~, nndb_te, ~] = DbSlice.slice(nndb_lle, sel); 
@@ -173,7 +173,7 @@ import nnf.db.Format;
 w_features = W' * nndb_tr.features;
 nndb_lda = NNdb('LDA', w_features, nndb_tr.n_per_class, true, [], Format.H_N);
 %nndb_lda = NNdb('LDA', w_features, nndb_tr.n_per_class, false, nndb_tr.cls_lbl, Format.H_N);
-nndb_lda.plot();
+%nndb_lda.plot();
 
 import nnf.alg.TSNE;
 info = [];
@@ -196,7 +196,7 @@ nndb_full = DbSlice.slice(nndb, sel);
 nndb_lle = LLE.do(nndb_full, info);
 
 % Slice the LLE dataset into training and testing
-sel = [];
+sel = Selection();
 sel.tr_col_indices = [1 2 4 8 9 11];
 sel.te_col_indices = [3 5 6 7 10 12];
 [ nndb_tr, ~, nndb_te, ~] = DbSlice.slice(nndb_lle, sel); 
@@ -229,7 +229,7 @@ nndb_full = DbSlice.slice(nndb, sel);
 nndb_tsne = TSNE.do(nndb_full, info);
 
 % Slice the TSNE dataset into training and testing
-sel = [];
+sel = Selection();
 sel.tr_col_indices        = [1 2 4 8 9 11];
 sel.te_col_indices        = [3 5 6 7 10 12];
 [ nndb_tr, ~, nndb_te, ~] = DbSlice.slice(nndb_tsne, sel); 

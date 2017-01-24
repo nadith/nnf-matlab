@@ -38,6 +38,7 @@ classdef DbSlice
             import nnf.core.iters.memory.DskmanMemDataIterator;
             DbSlice.slice(nndb, sel, DskmanMemDataIterator(nndb))
         end
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     end
         
     methods (Access = public, Static) 
@@ -565,7 +566,7 @@ classdef DbSlice
             %  
             % Resize images by 0.5 scale factor.
             nndb = NNdb('original', imdb_8, 8, true);
-            sel = [];
+            sel = Selection();
             sel.tr_col_indices = [1 2 4];   %[1 2 4]; 
             sel.te_col_indices = [3 5];     %[3 5]; 
             sel.scale          = 0.5;
