@@ -190,12 +190,6 @@ classdef DbSlice
                         uint16(ones(1, patch_loop_max_n)) ...
                         uint16(ones(1, patch_loop_max_n))};
 
-            % Noise required indices
-            noise_req_indices = [];
-            if (~isempty(sel.tr_noise_rate))
-                noise_req_indices = find(sel.tr_noise_rate ~= 0);
-            end
-
             % Initialize the generator
             data_generator.init(cls_ranges, col_ranges, true);       
 
@@ -239,6 +233,9 @@ classdef DbSlice
                         pimg = cimg(y:y+h-1, x:x+w-1, :);                        
                     end
 
+                    % The offset/index for the col_index in the tr_col_indices vector
+                    tci_offsets = [];
+                    
                     % Iterate through datasets
                     for dsi=1:numel(datasets)
                         dataset = datasets{dsi};
@@ -256,31 +253,38 @@ classdef DbSlice
                             % Update the dict_nndbs
                             dict_nndbs(uint32(edataset)) = nndbs;
                         end               
-                        
+                                                
                         % i.e sample_counts[Dataset.TR][pi] <= sample count for this nnpath, edataset entry                          
                         samples = sample_counts{uint32(edataset)};
 
                         % Build Training DB
                         if (edataset == Dataset.TR)
-
-                            % Check whether col_idx is a noise required index 
-                            process_noise = false;
-                            noise_rate = [];
-                            for i=1:noise_req_indices
-                                nri = noise_req_indices(i);
-                                if ((nri <= numel(sel.tr_col_indices)) && ...
-                                    (nri <= numel(sel.tr_noise_rate)) && ...
-                                    (0 ~= sel.tr_noise_rate(nri)) && ...
-                                    (col_idx == sel.tr_col_indices(nri)))
-                                
-                                    process_noise = true;
-                                    noise_rate = sel.tr_noise_rate(nri);
-                                    break;
-                                end
+                            
+                            % If noise or occlusion is required
+                            if ((~isempty(sel.tr_noise_rate) || ~isempty(sel.tr_occlusion_rate)) && ...
+                                isempty(tci_offsets))
+                                tci_offsets = find(sel.tr_col_indices == col_idx);
                             end
-
-                            [nndbs, samples] = ...
-                                DbSlice.build_nndb_tr(nndbs, pi, samples, is_new_class, pimg, process_noise, noise_rate);                            
+                            
+                            % Check whether col_idx is a noise required index 
+                            noise_rate = [];
+                            if (~isempty(sel.tr_noise_rate) && ...
+                                    (tci_offsets(dsi) <= numel(sel.tr_noise_rate)) && ...
+                                    (0 ~= sel.tr_noise_rate(tci_offsets(dsi))))
+                                noise_rate = sel.tr_noise_rate(tci_offsets(dsi));                                
+                            end
+                            
+                            % Check whether col_idx is a occlusion required index 
+                            occl_rate = [];
+                            if (~isempty(sel.tr_occlusion_rate) && ...
+                                    (tci_offsets(dsi) <= numel(sel.tr_occlusion_rate)) && ...
+                                    (0 ~= sel.tr_occlusion_rate(tci_offsets(dsi))))
+                                occl_rate = sel.tr_occlusion_rate(tci_offsets(dsi));                                
+                            end
+                            
+                           [nndbs, samples] = ...
+                                    DbSlice.build_nndb_tr(nndbs, pi, samples, is_new_class, pimg, ...
+                                                                            noise_rate, occl_rate);                            
 
                         % Build Training Target DB
                         elseif (edataset == Dataset.TR_OUT)
@@ -312,7 +316,7 @@ classdef DbSlice
                         sample_counts{uint32(edataset)} = samples;
                     end
                 end
-                [cimg, ~, ~, col_idx, datasets, stop] = data_generator.next();
+                [cimg, ~, cls_idx, col_idx, datasets, stop] = data_generator.next();
             end
 
             % Update the fields that depend on core db tensor
@@ -544,10 +548,8 @@ classdef DbSlice
             sel.tr_col_indices = [1:2 4];   %[1 2 4]; 
             sel.tr_noise_rate  = [0 0.5 0 0.5 0 0.5];       % percentage of corruption
             %sel.tr_noise_rate  = [0 0.5 0 0.5 0 Noise.G];  % last index with Gauss noise
-            sel.tr_col_indices = [1:2 4];   %[1 2 4];
-            sel.te_col_indices = [3 5];     %[3 5];
             sel.class_range    = [1:10];
-            [nndb_tr, ~, nndb_te, ~, ~, ~, ~] = DbSlice.slice(nndb, sel);
+            [nndb_tr, ~, ~, ~, ~, ~, ~] = DbSlice.slice(nndb, sel);
 
 
            	% 
@@ -731,7 +733,8 @@ classdef DbSlice
         end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        function [nndbs, samples] = build_nndb_tr(nndbs, pi, samples, is_new_class, img, process_noise, noise_rate) 
+        function [nndbs, samples] = build_nndb_tr(nndbs, pi, samples, is_new_class, img, ...
+                                                                        noise_rate, occlusion_rate) 
             % BUILD_NNDB_TR: builds the nndb training database.
             %          
             % Returns
@@ -751,19 +754,35 @@ classdef DbSlice
             if (isempty(nndbs)); return; end;
             nndb = nndbs{pi};
             
-            if (process_noise)
+            if (~isempty(occlusion_rate) || ~isempty(noise_rate))
                 
                 [h, w, ch] = size(img);
 
+                % Adding different occlusions depending on the precentage
+                if (~isempty(occlusion_rate))
+                    sh = floor((1-occlusion_rate) * h);
+                    
+                    occl_patch = uint8(zeros(h-sh+1, w));
+                    
+                    % For grey scale
+                    if (ch == 1)
+                        img(sh:end, :) = occl_patch;
+                    else
+                        % For colored
+                        for ich=1:ch
+                            img(sh:end, :, ich) = occl_patch;
+                        end
+                    end
+                    
                 % Add different noise depending on the type or rate
                 % (ref. Enums/Noise)
-                if (noise_rate == Noise.G)
+                elseif (~isempty(noise_rate) && (noise_rate == Noise.G))
                     img = imnoise(img, 'gaussian');
                     % img = imnoise(img, 'gaussian');
                     % img = imnoise(img, 'gaussian');
                     % img = imnoise(img, 'gaussian');
-
-                else
+                    
+                elseif (~isempty(noise_rate))
                     % Perform random corruption
                     % Corruption Size (H x W)
                     cs = [uint16(h*noise_rate) uint16(w*noise_rate)]; 
@@ -958,10 +977,3 @@ classdef DbSlice
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     end
 end
-            
-
-
-
-        
-
-

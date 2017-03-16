@@ -35,7 +35,8 @@ classdef Selection
     %}
     properties (SetAccess = public)
         tr_col_indices      % Training column indices
-        tr_noise_rate       % Rate or noise types for the above field
+        tr_noise_rate       % Rate or noise types for column index
+        tr_occlusion_rate   % Occlusion rate for column index
         tr_out_col_indices  % Training target column indices
         val_col_indices     % Validation column indices
         val_out_col_indices % Validation target column indices
@@ -63,7 +64,8 @@ classdef Selection
         % Constructs :obj:`Selection` instance.
 
         self.tr_col_indices      = [];      % Training column indices
-        self.tr_noise_rate       = [];      % Rate or noise types for the above field
+        self.tr_noise_rate       = [];      % Rate or noise types for column index
+        self.tr_occlusion_rate   = [];      % Occlusion rate for column index
         self.tr_out_col_indices  = [];      % Training target column indices
         self.val_col_indices     = [];      % Validation column indices
         self.val_out_col_indices = [];      % Validation target column indices
@@ -88,6 +90,7 @@ classdef Selection
         sel = Selection();
         sel.tr_col_indices      = self.tr_col_indices;
         sel.tr_noise_rate       = self.tr_noise_rate;
+        sel.tr_occlusion_rate   = self.tr_occlusion_rate;
         sel.tr_out_col_indices  = self.tr_out_col_indices;
         sel.val_col_indices     = self.val_col_indices;
         sel.val_out_col_indices = self.val_out_col_indices;
@@ -127,6 +130,7 @@ classdef Selection
         iseq = false;
         if (isequal(self.tr_col_indices, sel.tr_col_indices) && ...
             isequal(self.tr_noise_rate, sel.tr_noise_rate) && ...
+            isequal(self.tr_occlusion_rate, sel.tr_occlusion_rate) && ...
             isequal(self.tr_out_col_indices, sel.tr_out_col_indices) && ...
             isequal(self.val_col_indices, sel.val_col_indices) && ...
             isequal(self.val_out_col_indices, sel.val_out_col_indices) && ...
