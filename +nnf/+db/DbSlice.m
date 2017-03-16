@@ -725,9 +725,9 @@ classdef DbSlice
             nndb.n_per_class(end) = nndb.n_per_class(end) + 1;
 
             % Set class label of nndb, dynamic expansion
-            cls_lbl = nndb.cls_n - 1;
+            cls_lbl = nndb.cls_n;
             if (isempty(nndb.cls_lbl)); nndb.cls_lbl = uint16([]); end;
-            nndb.cls_lbl = cat(1, nndb.cls_lbl, uint16([cls_lbl]));
+            nndb.cls_lbl = cat(2, nndb.cls_lbl, uint16([cls_lbl]));
         end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

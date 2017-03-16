@@ -57,7 +57,7 @@ classdef SRC
             if (~isfield(info,'lambda')); info.lambda = 0.01; end; 
             
             coeff = SRC.train_lasso(nndb_g.features, nndb_p.features, info.lambda, 0, 0);
-            accuracy = SRC.lass_recogn(nndb_g.features, nndb_p.features, nndb_g.cls_lbl', nndb_p.cls_lbl', coeff, 2, 0, 0);
+            accuracy = SRC.lass_recogn(nndb_g.features, nndb_p.features, nndb_g.cls_lbl, nndb_p.cls_lbl, coeff, 2, 0, 0);
                         
             % TODO:
             %
