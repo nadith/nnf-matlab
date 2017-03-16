@@ -262,7 +262,7 @@ classdef NNdb < handle
                 
             elseif (isempty(n_per_class))
                 % Build n_per_class from cls_lbl
-                [n_per_class, ~] = hist(cls_lbl,unique(cls_lbl))
+                [n_per_class, ~] = hist(cls_lbl,unique(double(cls_lbl)));
             end
             
         	% Set defaults for instance variables
