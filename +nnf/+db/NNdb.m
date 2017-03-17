@@ -94,6 +94,42 @@ classdef NNdb < handle
             self.set_db(db, n_per_class, build_cls_lbl, cls_lbl, format);
         end
       
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%                
+        function nndb = merge(self, nndb)
+            % Imports
+            import nnf.db.NNdb;
+            
+            assert(self.h == nndb.h && self.w == nndb.w && self.ch == nndb.ch);
+            assert(self.cls_n == nndb.cls_n);
+            
+            db = uint8(zeros(self.h, self.w, self.ch, self.n + nndb.n));
+            cls_lbl = uint16(zeros(1, self.n + nndb.n));
+            en = 0;
+            for i=1:self.cls_n
+                % Fetch data from db1
+                cls_st = self.cls_st(i);
+                cls_end = cls_st + uint32(self.n_per_class(i)) - uint32(1);
+                
+                st = en + 1;
+                en = st + self.n_per_class(i) - 1;                
+                
+                db(:, :, :, st:en) = self.db(:, :, :, cls_st:cls_end);
+                cls_lbl(st:en) = i .* uint16(ones(1, self.n_per_class(i)));
+                
+                % Fetch data from db2
+                cls_st = nndb.cls_st(i);
+                cls_end = cls_st + uint32(nndb.n_per_class(i)) - uint32(1);
+                
+                st = en + 1;
+                en = st + nndb.n_per_class(i) - 1;
+                
+                db(:, :, :, st:en) = nndb.db(:, :, :, cls_st:cls_end);
+                cls_lbl(st:en) = i .* uint16(ones(1, nndb.n_per_class(i)));
+            end
+                        
+            nndb = NNdb('merged', db, [], false, cls_lbl);            
+        end
+        
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%        
         function init_db_fields(self)
             import nnf.db.Format;
