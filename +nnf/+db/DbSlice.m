@@ -307,7 +307,7 @@ classdef DbSlice
                                 DbSlice.build_nndb_te(nndbs, pi, samples, is_new_class, pimg);
 
                         % Build Testing Target DB
-                        elseif (edataset == Dataset.TE)
+                        elseif (edataset == Dataset.TE_OUT)
                             [nndbs, samples] = ...
                                 DbSlice.build_nndb_te_out(nndbs, pi, samples, is_new_class, pimg);
                         end
