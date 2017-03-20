@@ -384,6 +384,8 @@ classdef NNdb < handle
         function new_nndb = clone(self, name) 
             % CLONE: Creates a copy of this NNdb object
             %
+            % Imports 
+            import nnf.db.NNdb;
             
             new_nndb = NNdb(name, self.db, self.n_per_class, self.build_cls_lbl, self.cls_lbl, self.format);
         end
