@@ -331,8 +331,7 @@ classdef (Abstract) DAERegModel < handle
 
                     % First nndb
                     if (i==1)
-                        nndb = self.nndbs{i};
-                        db = zeros(nndb.h*nndb.w*nndb.ch, nndb.n);
+                        nndb = self.nndbs{i};                        
 
                         tr_db = self.nndbs{i}.features(:, self.tr_indices);
                         te_db = self.nndbs{i}.features(:, self.te_indices);
@@ -343,6 +342,7 @@ classdef (Abstract) DAERegModel < handle
                         % Apply it to te_db
                         te_db         = W'* bsxfun(@minus, te_db, m);
 
+                        db = zeros(size(tr_db, 1), nndb.n);
                         db(:, self.tr_indices) = tr_db;
                         db(:, self.te_indices) = te_db;
 
@@ -978,8 +978,5 @@ classdef (Abstract) DAERegModel < handle
         end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    end   
-    
-
+    end
 end
-
