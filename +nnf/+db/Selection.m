@@ -1,4 +1,4 @@
-classdef Selection
+classdef Selection < handle
     %{
     Selection denotes the selection paramters for a database.
 
@@ -87,6 +87,9 @@ classdef Selection
 
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     function sel = clone(self)
+        % Imports
+        import nnf.db.Selection;
+        
         sel = Selection();
         sel.tr_col_indices      = self.tr_col_indices;
         sel.tr_noise_rate       = self.tr_noise_rate;

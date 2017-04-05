@@ -46,7 +46,7 @@ classdef DbSlice
         % Public Interface
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         function [nndbs_tr, nndbs_val, nndbs_te, nndbs_tr_out, nndbs_val_out, nndbs_te_out, edatasets] = ...
-                                                                    slice(nndb, sel, data_generator) 
+                                                                    slice(nndb, sel, data_generator, pp_param) 
             % SLICE: slices the database according to the selection structure.
             % IMPL_NOTES: The new db will contain img at consecutive locations for duplicate indices
             % i.e Tr:[1 2 3 1], DB:[1 1 2 3]
@@ -136,8 +136,9 @@ classdef DbSlice
             end                                              
 
             % Set defaults for data generator   
-            if (nargin < 3)    
-                data_generator = DskmanMemDataIterator(nndb);
+            if (nargin < 3 || isempty(data_generator))
+                if (nargin < 4); pp_param = []; end
+                data_generator = DskmanMemDataIterator(pp_param);
             end
             data_generator.init_params(nndb);
             
@@ -177,9 +178,23 @@ classdef DbSlice
             % i.e dict_nndbs(Dataset.TR) => {NNdb_Patch_1, NNdb_Patch_2, ...}
             dict_nndbs = DbSlice.init_dict_nndbs(col_ranges);
 
-            % Patch iterating loop's max count
-            patch_loop_max_n = numel(sel.nnpatches);
-            if (patch_loop_max_n == 0); patch_loop_max_n = 1; end;
+            % Set patch iterating loop's max count and nnpatch list
+            patch_loop_max_n = 1;
+            nnpatch_list = [];
+
+            if (~isempty(sel.nnpatches))
+                % Must have atleast 1 patch to represent the whole image
+                nnpatch = sel.nnpatches(1);
+            
+                % PERF: If there is only 1 patch and it is the whole image
+                if ((length(sel.nnpatches) == 1) && nnpatch.is_holistic)
+                    % Pass
+
+                else
+                    nnpatch_list = sel.nnpatches;
+                    patch_loop_max_n = length(sel.nnpatches);
+                end
+            end
 
             % Initialize the sample counts
             % Ordered by REF_ORDER defined above
@@ -222,15 +237,24 @@ classdef DbSlice
                     pimg = cimg;
 
                     % Generate the image patch
-                    if (~isempty(sel.nnpatches))                        
-                        nnpatch = sel.nnpatches(pi);
+                    if (~isempty(nnpatch_list))                        
+                        nnpatch = nnpatch_list(pi);
                         x = nnpatch.offset(2);
                         y = nnpatch.offset(1);                                                                                
                         w = nnpatch.w;
                         h = nnpatch.h;
-
+                        
+                        % Target dbs for input patches might be holistic
+                        if (nnpatch.is_holistic)
+                            % pass
                         % Extract the patch
-                        pimg = cimg(y:y+h-1, x:x+w-1, :);                        
+                        elseif (nndb.format == Format.H_W_CH_N || nndb.format == Format.N_H_W_CH)
+                            pimg = cimg(y:y+h-1, x:x+w-1, :);
+                        
+                        elseif (nndb.format == Format.H_N || nndb.format == Format.N_H)
+                            % 1D axis is `h` if w > 1, otherwise 'w'
+                             if (w > 1); pimg = cimg(x:x+w-1); else; pimg = cimg(y:y+h-1); end
+                        end
                     end
 
                     % The offset/index for the col_index in the tr_col_indices vector
@@ -247,7 +271,7 @@ classdef DbSlice
                         if (isempty(nndbs))
                             % Add an empty NNdb for all `nnpatch` on first edataset entry
                             for pi_tmp=1:patch_loop_max_n
-                                nndbs{end+1} = NNdb([Dataset.str(edataset) '_p' num2str(pi_tmp)], [], [], false, [], nndb.format);
+                                nndbs(end+1) = NNdb([Dataset.str(edataset) '_p' num2str(pi_tmp)], [], [], false, [], nndb.format);
                             end
 
                             % Update the dict_nndbs
@@ -325,7 +349,7 @@ classdef DbSlice
                 nndbs = nndbss{i};
                 if (isempty(nndbs)); continue; end                
                 for j =1:numel(nndbs)
-                    nndb_patch = nndbs{j};
+                    nndb_patch = nndbs(j);
                     nndb_patch.init_db_fields();
                 end
             end            
@@ -620,7 +644,7 @@ classdef DbSlice
         function nndbs = p0_nndbs(dict_nndbs, ekey)
             if (~isempty(dict_nndbs(ekey)))
                 nndbs = dict_nndbs(ekey);
-                nndbs = nndbs{1};
+                nndbs = nndbs(1);
             else
                 nndbs = [];
             end
@@ -658,14 +682,15 @@ classdef DbSlice
             % Import
             import nnf.db.Dataset;
             import nnf.db.DbSlice;
+            import nnf.db.NNdb;
 
             % LIMITATION: Does not support enum key types
             dict_nndbs = containers.Map(uint32(Dataset.TR), uint16(zeros(2)));
             remove(dict_nndbs, uint32(Dataset.TR));
 
             % Iterate through ranges
-            for ri=1:numel(col_ranges)
-                dict_nndbs(ri) = cell(0, 0);
+            for ri=1:numel(col_ranges)                
+                dict_nndbs(ri) = NNdb.empty; %cell(0, 0);
                 %...
                 %   DbSlice.init_nndb(Dataset.str(ekey), sel, nndb, n_per_class, cls_range_size, true);
             end
@@ -752,7 +777,7 @@ classdef DbSlice
             import nnf.db.Noise;
              
             if (isempty(nndbs)); return; end;
-            nndb = nndbs{pi};
+            nndb = nndbs(pi);
             
             if (~isempty(occlusion_rate) || ~isempty(noise_rate))
                 
@@ -861,7 +886,7 @@ classdef DbSlice
             import nnf.db.DbSlice;
 
             if (isempty(nndbs)); return; end;
-            nndb = nndbs{pi};
+            nndb = nndbs(pi);
             nndb.add_data(img);
             
             % Update the properties of nndb
@@ -887,7 +912,7 @@ classdef DbSlice
             import nnf.db.DbSlice;
 
             if (isempty(nndbs)); return; end;
-            nndb = nndbs{pi};
+            nndb = nndbs(pi);
             nndb.add_data(img);
             
             % Update the properties of nndb
@@ -913,7 +938,7 @@ classdef DbSlice
             import nnf.db.DbSlice;
 
             if (isempty(nndbs)); return; end;
-            nndb = nndbs{pi};
+            nndb = nndbs(pi);
             nndb.add_data(img);
             
             % Update the properties of nndb
@@ -939,7 +964,7 @@ classdef DbSlice
             import nnf.db.DbSlice;
 
             if (isempty(nndbs)); return; end;
-            nndb = nndbs{pi};
+            nndb = nndbs(pi);
             nndb.add_data(img);
             
             % Update the properties of nndb
@@ -965,7 +990,7 @@ classdef DbSlice
             import nnf.db.DbSlice;
 
             if (isempty(nndbs)); return; end;
-            nndb = nndbs{pi};
+            nndb = nndbs(pi);
             nndb.add_data(img);
             
             % Update the properties of nndb

@@ -14,7 +14,7 @@ classdef NNdb < handle
     
     % Copyright 2015-2016 Nadith Pathirage, Curtin University (chathurdara@gmail.com).
     
-	properties (SetAccess = public)
+	properties (SetAccess = public) 
         db;             % (M) Actual Database   
         format;         % (s) Current Format of The Database
         
@@ -35,8 +35,12 @@ classdef NNdb < handle
         python_db;      % Python Compatible db Format
         features;
         im_ch_axis;     % Image channel axis
+        db_scipy;
+        db_convo_tf;
+        db_convo_th;
+        features_scipy;
     end
-            
+
     methods (Access = public) 
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         % Public Interface
@@ -287,13 +291,13 @@ classdef NNdb < handle
             % Set defaults for n_per_class
             if (isempty(n_per_class) && isempty(cls_lbl))
                 if (format == Format.H_W_CH_N)
-                    [~, ~, ~, n_per_class] = size(self.db);
+                    [~, ~, ~, n_per_class] = size(db);
                 elseif (format == Format.H_N)
-                    [~, n_per_class] = size(self.db);
+                    [~, n_per_class] = size(db);
                 elseif (format == Format.N_H_W_CH)
-                    [n_per_class, ~, ~, ~] = size(self.db);
+                    [n_per_class, ~, ~, ~] = size(db);
                 elseif (format == Format.N_H)
-                    [n_per_class, ~] = size(self.db);
+                    [n_per_class, ~] = size(db);
                 end
                 
             elseif (isempty(n_per_class))
@@ -650,17 +654,77 @@ classdef NNdb < handle
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         % Dependant property Implementations
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        function value = get.matlab_db(self) 
-            % TODO: rollaxis/permute depending on the format
+        function db = get.db_convo_th(self)
+            % db compatible for convolutional networks.
+
+            % Imports
+            import nnf.db.Format; 
             
-            value = self.n / self.n_per_class;
-        end  
+            % N x CH x H x W
+            if (self.format == Format.N_H_W_CH || self.format == Format.H_W_CH_N)
+                db = permute(self.db_scipy, [1 4 2 3]);
+                return;
+            end
+
+            % N x 1 x H x 1
+            if (self.format == Format.N_H || self.format == Format.H_N)
+                db = reshape(self.db_scipy, self.n, 1, self.h, 1);
+                return;
+
+            else
+                error('Unsupported db format');
+            end
+        end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        function value = get.python_db(self) 
-            % TODO: rollaxis/permute depending on the format
+        function db = get.db_convo_tf(self)
+            % db compatible for convolutional networks.
             
-            value = self.n / self.n_per_class;
+            % Imports
+            import nnf.db.Format; 
+            
+            % N x H x W x CH
+            if (self.format == Format.N_H_W_CH || self.format == Format.H_W_CH_N)
+                db = self.db_scipy;
+
+            % N x H
+            elseif (self.format == Format.N_H || self.format == Format.H_N)
+                db = self.db_scipy(:, :, 1, 1);
+
+            else
+                error('Unsupported db format');
+            end
+        end
+
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        function db = get.db_scipy(self)
+            % db compatible for scipy library.
+
+            % Imports
+            import nnf.db.Format; 
+            
+            % N x H x W x CH or N x H  
+            if (self.format == Format.N_H_W_CH || self.format == Format.N_H)
+                db = self.db;
+                return;
+            end
+
+            % H x W x CH x N
+            if (self.format == Format.H_W_CH_N)
+                db = permute(self.db,[4 1 2 3]);                
+
+            % H x N
+            elseif (self.format == Format.H_N)
+                db = permute(self.db,[2 1]);
+            else
+                error('Unsupported db format');
+            end
+        end
+
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        function db = get.features_scipy(self)
+            % db compatible for scipy library."""     
+            db = double(reshape(self.db_scipy, self.n, self.h * self.w * self.ch));
         end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

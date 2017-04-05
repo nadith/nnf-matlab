@@ -55,13 +55,13 @@ classdef AECfg
             self.outPreProcess = cell(0, 0);
             self.encoderInitFcn = 'initwb';
             self.decoderInitFcn = 'initwb';
-            self.trainFcn = 'trainscg';            
+            self.trainFcn = 'trainscg';
             self.trainParam.goal = 1e-10;
-            self.trainParam.sigma = 1e-10;
-            self.trainParam.lambda = 1e-13;
+            self.trainParam.sigma = 1e-4; %1e-6;
+            self.trainParam.lambda = 1e-6; %1e-8;
             self.trainParam.epochs = 1250000;
             self.trainParam.max_fail = 2500;
-            self.trainParam.min_grad = 1e-10;
+            self.trainParam.min_grad = 1e-10; %5e-7;
         end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -87,7 +87,5 @@ classdef AECfg
         end 
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    end
-    
+    end 
 end
-

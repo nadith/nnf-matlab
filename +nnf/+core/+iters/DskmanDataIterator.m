@@ -1,5 +1,5 @@
-classdef DskmanDataIterator < handle
-    % DskmanDataIterator base class for :obj:`NNDiskMan' related iterators.
+classdef DskmanDataIterator < nnf.core.iters.DataIterator
+    % `DskmanDataIterator` base class for :obj:`NNDiskMan' related iterators.
     % 
     % .. warning:: abstract class and must not be instantiated.
     % 
@@ -26,11 +26,8 @@ classdef DskmanDataIterator < handle
     % union_col_range : :obj:`list`
     %     List of all column ranges. The union set operation is applied here.
     % 
-    % read_data : bool
+    % read_data_ : bool
     %     Whether to read the actual data.
-    % 
-    % gen_next : `types.GeneratorType`
-    %     Core generator
     % 
     % Notes
     % -----
@@ -49,25 +46,35 @@ classdef DskmanDataIterator < handle
     end
     
     properties (SetAccess = protected)
-        gen_next;
-        read_data;
+        read_data_;
     end
     
     properties (SetAccess = private)
         % [LIMITATION: PYTHON-MATLAB]
         % State maintaining variables -alternative for yield in python
-        i;
-        j;
-        is_in_loop_2;
+        i__;
+        j__;
+        is_in_loop_2__;
         
-        cls_idx;
-        clses_visited;
-        dataset_count;
+        cls_idx__;
+        clses_visited__;
+        dataset_count__;
     end
     
     methods (Access = public)
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         function self = DskmanDataIterator(db_pp_params)
+            % Constructor of the abstract class :obj:`DataIterator`.
+            % 
+            % Must call init() to intialize the instance.
+            % 
+            % Parameters
+            % ----------
+            % db_pp_params : :obj:`dict`
+            %     Pre-processing parameters for :obj:`ImageDataPreProcessor`.
+            %
+            self = self@nnf.core.iters.DataIterator(db_pp_params);            
+            
             % List of class ranges (list of lists)
             % i.e 
             % cls_ranges[0] = cls_range
@@ -81,10 +88,10 @@ classdef DskmanDataIterator < handle
             self.union_col_range = [];
             
             % PERF: Whether to read the data
-            self.read_data = true;
+            self.read_data_ = true;
         
             % [INHERITED]: Used in __next__() to utilize the generator with yield
-            self.gen_next = [];
+            self.gen_next_ = [];
         end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -93,7 +100,7 @@ classdef DskmanDataIterator < handle
             import nnf.db.Dataset 
 
             % PERF: Whether to read the data
-            self.read_data = read_data;
+            self.read_data_ = read_data;
         
             % List of class ranges
             self.cls_ranges = cls_ranges;
@@ -109,21 +116,22 @@ classdef DskmanDataIterator < handle
 
             % [LIMITATION: PYTHON-MATLAB]
             % INHERITED: Used in __next__() to utilize the generator with yield
-            % self.gen_next = self.next()
+            % self.gen_next_ = self.next()
 
             % TODO: USE PERSISTANT VARIABLES (But look for thread safety)
             % [LIMITATION: PYTHON-MATLAB]
             % Initialize state maintaining variables -alternative for yield in python
-            self.i = 1;
-            self.is_in_loop_2 = false;            
-            self.cls_idx = -1;  % will be set in loop_1
-            self.dataset_count = uint8(zeros(1, numel(self.col_ranges)));  % Dataset served count 
+            self.i__ = 1;
+            self.is_in_loop_2__ = false;            
+            self.cls_idx__ = -1;  % will be set in loop_1
+            self.dataset_count__ = uint8(zeros(1, numel(self.col_ranges)));  % Dataset served count 
 
             % Track the classes to decide newly added classes for class ranges
             % Keyed by the range index of class ranges
-            % TODO: HACK: Ref:
-            self.clses_visited = containers.Map(uint32(Dataset.TR), uint16(zeros(2)));
-            remove(self.clses_visited, uint32(Dataset.TR));
+            % TODO: HACK due to limitation of matlab of Map container definition for int key.
+            % Ref:
+            self.clses_visited__ = containers.Map(uint32(Dataset.TR), uint16(zeros(2)));
+            remove(self.clses_visited__, uint32(Dataset.TR));
         end       
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -153,64 +161,64 @@ classdef DskmanDataIterator < handle
             % Itearate the union of the class ranges i.e (tr, val, te, etc)                        
             while (true)
 
-                if (~self.is_in_loop_2)
+                if (~self.is_in_loop_2__)
                 
                     if (isscalar(self.union_cls_range) && isa(self.union_cls_range, 'Select'))
-                        self.cls_idx = self.i;
+                        self.cls_idx__ = self.i__;
 
                         % Update loop index variable
-                        self.i = self.i + 1;
+                        self.i__ = self.i__ + 1;
 
                         % When the first col_idx is out of true range, break
-                        if (~self.is_valid_col_idx(self.cls_idx, false))
-                            self.check_and_issue_warning(self.cls_idx, self.cls_ranges_max, ... 
-                                ['Class: >=' num2str(self.cls_idx) ' missing in the database']);
+                        if (~self.is_valid_col_idx_(self.cls_idx__, false))
+                            self.check_and_issue_warning(self.cls_idx__, self.cls_ranges_max, ... 
+                                ['Class: >=' num2str(self.cls_idx__) ' missing in the database']);
                             break;
                         end
                         
                     else
-                        if (self.i > numel(self.union_cls_range)); break; end
-                        self.cls_idx = self.union_cls_range(self.i);
+                        if (self.i__ > numel(self.union_cls_range)); break; end
+                        self.cls_idx__ = self.union_cls_range(self.i__);
 
                         % Update loop index variable
-                        self.i = self.i + 1;
+                        self.i__ = self.i__ + 1;
 
                         % When a cls_idx is out of true range, skip
-                        if (~self.is_valid_cls_idx(self.cls_idx)); continue; end
+                        if (~self.is_valid_cls_idx_(self.cls_idx__)); continue; end
                     end
 
                     % Itearate the union of the column ranges i.e (tr, val, te, etc)
-                    self.j = 1;
+                    self.j__ = 1;
                 end
 
                 while (true)
 
                     % Save state
-                    self.is_in_loop_2 = true;
+                    self.is_in_loop_2__ = true;
                     
                     if (isscalar(self.union_col_range) && isa(self.union_col_range, 'Select'))
-                        col_idx = self.j;
+                        col_idx = self.j__;
 
                         % Update loop index variable
-                        self.j = self.j + 1;
+                        self.j__ = self.j__ + 1;
 
                         % When the col_idx is out of true range, break
-                        if (~self.is_valid_col_idx(self.cls_idx, col_idx, false))
+                        if (~self.is_valid_col_idx_(self.cls_idx__, col_idx, false))
                             self.check_and_issue_warning(col_idx, self.col_ranges_max, ...
-                                ['Class:' num2str(self.cls_idx) ' ImageIdx: >=' ...
+                                ['Class:' num2str(self.cls_idx__) ' ImageIdx: >=' ...
                                 num2str(col_idx) ' are missing in the database'])
                             break;
                         end
 
                     else                        
-                        if (self.j > numel(self.union_col_range)); break; end
-                        col_idx = self.union_col_range(self.j);
+                        if (self.j__ > numel(self.union_col_range)); break; end
+                        col_idx = self.union_col_range(self.j__);
 
                         % Update loop index variable
-                        self.j = self.j + 1;
+                        self.j__ = self.j__ + 1;
 
                         % When a col_idx is out of true range, skip
-                        if (~self.is_valid_col_idx(self.cls_idx, col_idx))
+                        if (~self.is_valid_col_idx_(self.cls_idx__, col_idx))
                             continue;
                         end
                     end
@@ -219,26 +227,26 @@ classdef DskmanDataIterator < handle
                     % filtered_datasets => [(TR, is_new_class), (VAL, ...), (TE, ...), ...]
                     filtered_datasets = ...
                             self.filter_datasets_by_cls_col_idx( ...
-                                                            self.cls_idx, ...
+                                                            self.cls_idx__, ...
                                                             col_idx, ...
-                                                            self.clses_visited, ...
-                                                            self.dataset_count);
+                                                            self.clses_visited__, ...
+                                                            self.dataset_count__);
 
                     % Vrepeatalidity of col_idx in the corresponding self.cls_ranges[rng_idx]
                     if (numel(filtered_datasets) == 0); continue; end
 
                     % Fetch the image at cls_idx, col_idx
-                    [cimg, frecord] = self.get_cimg_frecord_in_next(self.cls_idx, col_idx);
-                    cls_idx = self.cls_idx;
+                    [cimg, frecord] = self.get_cimg_frecord_in_next_(self.cls_idx__, col_idx);
+                    cls_idx = self.cls_idx__;
                     return;
 
                     % TODO: Use self._imdata_pp to pre-process data
 
-                    % Yield
+                    % [LIMITATION: PYTHON-MATLAB]
                     % yield cimg, frecord, cls_idx, col_idx, filtered_entries  # all_entries
                 end
 
-                self.is_in_loop_2 = false;                
+                self.is_in_loop_2__ = false;                
             end
 
             cimg = [];
@@ -268,10 +276,11 @@ classdef DskmanDataIterator < handle
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     end
     
-    methods (Abstract, Access = public)
-        [cimg, frecord] = get_cimg_frecord_in_next(self, cls_idx, col_idx)  % Fetch image @ cls_idx, col_idx
-        valid = is_valid_cls_idx(self, cls_idx, show_warning)  % Check the validity cls_idx
-        valid = is_valid_col_idx(self, cls_idx, col_idx, show_warning)  % Check the validity col_idx of the class denoted by cls_idx
+    methods (Abstract, Access = protected)
+        [cimg, frecord] = get_cimg_frecord_in_next_(self, cls_idx, col_idx)  % Fetch image @ cls_idx, col_idx
+        valid = is_valid_cls_idx_(self, cls_idx, show_warning)  % Check the validity cls_idx
+        valid = is_valid_col_idx_(self, cls_idx, col_idx, show_warning)  % Check the validity col_idx of the class denoted by cls_idx
+        valid = get_n_per_class_(self, cls_idx)  % Fetch no. of samples per class
     end
     
     methods (Access = private)
@@ -343,7 +352,7 @@ classdef DskmanDataIterator < handle
                         ratio = 0.6;
                     end
 
-                    if (c >= self.get_n_per_class(cls_idx)*ratio)
+                    if (c >= self.get_n_per_class_(cls_idx)*ratio)
                         success = false;
                     end
                 end
@@ -506,7 +515,6 @@ classdef DskmanDataIterator < handle
         end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    end
-    
+    end   
   
 end
