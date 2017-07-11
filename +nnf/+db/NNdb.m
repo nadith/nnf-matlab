@@ -466,6 +466,14 @@ classdef NNdb < handle
             end            
         end
         
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        function save(self, filepath)
+            imdb_obj.db = self.db;
+            imdb_obj.class = self.cls_lbl;
+            imdb_obj.im_per_class = unique(self.n_per_class);
+            save(filepath, 'imdb_obj');
+        end
+            
        	%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         function plot(self, n, offset) 
             % PLOT: plots the features.
