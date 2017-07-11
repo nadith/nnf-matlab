@@ -102,11 +102,24 @@ classdef NNdb < handle
         function nndb = merge(self, nndb)
             % Imports
             import nnf.db.NNdb;
+            import nnf.db.Format;
             
             assert(self.h == nndb.h && self.w == nndb.w && self.ch == nndb.ch);
             assert(self.cls_n == nndb.cls_n);
+            assert(self.cls_n == nndb.cls_n)
+            assert(strcmp(class(self.db), class(nndb.db)))
+            assert(self.format == nndb.format)
+        
+            if (self.format == Format.H_W_CH_N)
+                db = cast(zeros(self.h, self.w, self.ch, self.n + nndb.n), class(self.db));
+            elseif (self.format == Format.H_N)
+                db = cast(zeros(self.h * self.w * self.ch, self.n + nndb.n), class(self.db));
+            elseif (self.format == Format.N_H_W_CH)
+                db = cast(zeros(self.n + nndb.n, self.h, self.w, self.ch), class(self.db));
+            elseif (self.format == Format.N_H)
+                db = cast(zeros(self.n + nndb.n, self.h * self.w * self.ch), class(self.db));
+            end
             
-            db = uint8(zeros(self.h, self.w, self.ch, self.n + nndb.n));
             cls_lbl = uint16(zeros(1, self.n + nndb.n));
             en = 0;
             for i=1:self.cls_n
@@ -115,10 +128,18 @@ classdef NNdb < handle
                 cls_end = cls_st + uint32(self.n_per_class(i)) - uint32(1);
                 
                 st = en + 1;
-                en = st + self.n_per_class(i) - 1;                
-                
-                db(:, :, :, st:en) = self.db(:, :, :, cls_st:cls_end);
+                en = st + self.n_per_class(i) - 1;
                 cls_lbl(st:en) = i .* uint16(ones(1, self.n_per_class(i)));
+                
+                if (self.format == Format.H_W_CH_N)
+                    db(:, :, :, st:en) = self.db(:, :, :, cls_st:cls_end);
+                elseif (self.format == Format.H_N)
+                    db(:, st:en) = self.db(:, cls_st:cls_end);
+                elseif (self.format == Format.N_H_W_CH)
+                    db(st:en, :, :, :) = self.db(cls_st:cls_end, :, :, :);
+                elseif (self.format == Format.N_H)
+                    db(st:en, :) = self.db(cls_st:cls_end, :);
+                end            
                 
                 % Fetch data from db2
                 cls_st = nndb.cls_st(i);
@@ -126,12 +147,20 @@ classdef NNdb < handle
                 
                 st = en + 1;
                 en = st + nndb.n_per_class(i) - 1;
-                
-                db(:, :, :, st:en) = nndb.db(:, :, :, cls_st:cls_end);
                 cls_lbl(st:en) = i .* uint16(ones(1, nndb.n_per_class(i)));
+                
+                if (self.format == Format.H_W_CH_N)
+                    db(:, :, :, st:en) = nndb.db(:, :, :, cls_st:cls_end);
+                elseif (self.format == Format.H_N)
+                    db(:, st:en) = nndb.db(:, cls_st:cls_end);
+                elseif (self.format == Format.N_H_W_CH)
+                    db(st:en, :, :, :) = nndb.db(cls_st:cls_end, :, :, :);
+                elseif (self.format == Format.N_H)
+                    db(st:en, :) = nndb.db(cls_st:cls_end, :);
+                end
             end
                         
-            nndb = NNdb('merged', db, [], false, cls_lbl);            
+            nndb = NNdb('merged', db, [], false, cls_lbl, self.format);            
         end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%        
