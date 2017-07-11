@@ -1,4 +1,4 @@
-% Import classes required for NNdb
+ % Import classes required for NNdb
 import nnf.db.NNdb;
 import nnf.db.DbSlice;
 import nnf.db.Selection;
@@ -175,7 +175,22 @@ DCC.test_l2(info);
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % ADVANCED EXAMPLES %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% Example 1: Perform LDA, project all training samples to the LDA space and visualize with TSNE.
+% Example 1: Select randomly unique 3 images from each class and save it to a database file
+import nnf.utl.rand_unq
+cell_indices = cell(0, 0);
+cls_count = 100;
+for i=1:cls_count
+    cell_indices{i} = rand_unq(3, 12);
+end
+sel = Selection();
+sel.tr_col_indices        = cell_indices;
+sel.class_range           = [1:cls_count];
+[nndb_tr, ~, ~, ~, ~, ~, ~] = DbSlice.slice(nndb, sel);
+figure, nndb_tr.show(10, 3);
+nndb_tr.save('IMDB_66_66_AR_3.mat');
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Example 2: Perform LDA, project all training samples to the LDA space and visualize with TSNE.
 %
 import nnf.db.Format;
 w_features = W' * nndb_tr.features;
@@ -192,7 +207,7 @@ nndb_tsne = TSNE.do(nndb_lda, info);
 nndb_tsne.plot();
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% Example 2: Perform LLE, then classfication algorithm for recognition.
+% Example 3: Perform LLE, then classfication algorithm for recognition.
 %
 import nnf.alg.LLE;
 
@@ -224,7 +239,7 @@ W = PCA.l2(nndb_tr);
 accurary = Util.test(W, nndb_tr, nndb_te)
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% Example 2: Perform TSNE, then classfication algorithm for recognition.
+% Example 4: Perform TSNE, then classfication algorithm for recognition.
 %
 import nnf.alg.TSNE;
 info = [];
