@@ -300,15 +300,20 @@ classdef DbSlice
                             
                             % Check whether col_idx is a occlusion required index 
                             occl_rate = [];
+                            occl_type = [];
                             if (~isempty(sel.tr_occlusion_rate) && ...
                                     (tci_offsets(dsi) <= numel(sel.tr_occlusion_rate)) && ...
                                     (0 ~= sel.tr_occlusion_rate(tci_offsets(dsi))))
-                                occl_rate = sel.tr_occlusion_rate(tci_offsets(dsi));                                
+                                occl_rate = sel.tr_occlusion_rate(tci_offsets(dsi));
+                                
+                                if (~isempty(sel.tr_occlusion_type))
+                                    occl_type = sel.tr_occlusion_type(tci_offsets(dsi));
+                                end
                             end
                             
                            [nndbs, samples] = ...
                                     DbSlice.build_nndb_tr(nndbs, pi, samples, is_new_class, pimg, ...
-                                                                            noise_rate, occl_rate);                            
+                                                                    noise_rate, occl_rate, occl_type);                            
 
                         % Build Training Target DB
                         elseif (edataset == Dataset.TR_OUT)
@@ -566,15 +571,28 @@ classdef DbSlice
             % Select 1st 2nd 4th images of each identity for training + 
             %               add various noise types @ random locations of varying degree.
             %               default noise type: random black and white dots.
-            % Select 3rd 5th images of each identity for testing.
             nndb = NNdb('original', imdb_8, 8, true);
             sel = Selection();
             sel.tr_col_indices = [1:2 4];   %[1 2 4]; 
-            sel.tr_noise_rate  = [0 0.5 0 0.5 0 0.5];       % percentage of corruption
-            %sel.tr_noise_rate  = [0 0.5 0 0.5 0 Noise.G];  % last index with Gauss noise
+            sel.tr_noise_rate  = [0 0.5 0.2];       % percentage of corruption
+            %sel.tr_noise_rate  = [0 0.5 Noise.G];  % last index with Gauss noise
             sel.class_range    = [1:10];
             [nndb_tr, ~, ~, ~, ~, ~, ~] = DbSlice.slice(nndb, sel);
 
+            % 
+            % Select 1st 2nd 4th images of each identity for training + 
+            %               add various occlusion types ('t':top, 'b':bottom, 'l':left, 'r':right) of varying degree.
+            %               default occlusion type: 'b'.
+            nndb = NNdb('original', imdb_8, 8, true);
+            sel = Selection();
+            sel.tr_col_indices = [1:2 4];
+            sel.tr_occlusion_rate = [0 0.5 0.2];    % percentage of occlusion
+            sel.tr_occlusion_type = 'ttt';          % occlusion type: 't' for selected tr. indices [1, 2, 4]
+            %sel.tr_occlusion_type = 'tbr' 
+            %sel.tr_occlusion_type = 'lrb' 
+            sel.class_range = [1:10];
+            [nndb_tr, ~, ~, ~, ~, ~, ~] = DbSlice.slice(nndb, sel);
+            
 
            	% 
             % To prepare regression datasets, training dataset and training target dataset
@@ -634,6 +652,33 @@ classdef DbSlice
             sel.color_indices  = 5;         % color channel denoted by 5th index
             [nndb_tr, ~, nndb_te, ~, ~, ~, ~] = DbSlice.slice(nndb, sel);
 
+        end
+        
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    end
+    
+    methods (Access = public, Static) % ?nnf.alg.PCA
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        function [filter] = get_occlusion_patch(h, w, dtype, occlusion_type, occlusion_rate)
+            filter = ones(h, w);
+            filter = cast(filter, dtype);
+            
+            if (isempty(occlusion_type) || occlusion_type == 'b')
+                sh = floor((1-occlusion_rate) * h);
+                filter(sh+1:h, 1:w) = 0;
+
+            elseif (occlusion_type == 'r')
+                sh = floor((1-occlusion_rate) * w);
+                filter(1:h, sh+1:w) = 0;
+                
+            elseif (occlusion_type == 't')
+                sh = floor((occlusion_rate) * h);
+                filter(1:sh, 1:w) = 0;
+                
+            elseif (occlusion_type == 'l')
+                sh = floor((occlusion_rate) * w);
+                filter(1:h, 1:sh) = 0;
+            end
         end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -759,7 +804,7 @@ classdef DbSlice
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         function [nndbs, samples] = build_nndb_tr(nndbs, pi, samples, is_new_class, img, ...
-                                                                        noise_rate, occlusion_rate) 
+                                                        noise_rate, occlusion_rate, occlusion_type) 
             % BUILD_NNDB_TR: builds the nndb training database.
             %          
             % Returns
@@ -776,27 +821,23 @@ classdef DbSlice
             import nnf.db.Format;
             import nnf.db.Noise;
              
-            if (isempty(nndbs)); return; end;
+            if (isempty(nndbs)); return; end
             nndb = nndbs(pi);
             
             if (~isempty(occlusion_rate) || ~isempty(noise_rate))
                 
                 [h, w, ch] = size(img);
-
+                
                 % Adding different occlusions depending on the precentage
                 if (~isempty(occlusion_rate))
-                    sh = floor((1-occlusion_rate) * h);
-                    
-                    occl_patch = uint8(zeros(h-sh+1, w));
+                    filter = DbSlice.get_occlusion_patch(h, w, class(img), occlusion_type, occlusion_rate);                    
                     
                     % For grey scale
                     if (ch == 1)
-                        img(sh:end, :) = occl_patch;
+                        img = filter.*img;
                     else
                         % For colored
-                        for ich=1:ch
-                            img(sh:end, :, ich) = occl_patch;
-                        end
+                        img = repmat(filter, 1, 1, ch).*img;
                     end
                     
                 % Add different noise depending on the type or rate

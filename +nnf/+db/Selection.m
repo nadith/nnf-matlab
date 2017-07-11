@@ -1,42 +1,12 @@
 classdef Selection < handle
-    %{
-    Selection denotes the selection paramters for a database.
-
-    Attributes
-    ----------
-    TODO: Put this comment to a matlab compatible way
-
-    Selection Structure (with defaults)
-    -----------------------------------
-    sel.tr_col_indices      = []    % Training column indices
-    sel.tr_noise_rate       = []    % Rate or noise types for the above field
-    sel.tr_out_col_indices  = []    % Training target column indices
-    sel.val_col_indices     = []    % Validation column indices
-    sel.val_out_col_indices = []    % Validation target column indices
-    sel.te_col_indices      = []    % Testing column indices
-    sel.te_out_col_indices  = []    % Testing target column indices
-    sel.nnpatches           = []    % NNPatch object array
-    sel.use_rgb             = []    % Use rgb or convert to grayscale
-    sel.color_indices       = []    % Specific color indices (set .use_rgb = false)
-    sel.use_real            = False % Use real valued database TODO: (if .normalize = true, Operations ends in real values)  % noqa E501
-    
-    sel.scale               = []    % Scaling factor (resize factor)
-                                        int - Percentage of current size.
-                                        float - Fraction of current size.
-                                        tuple - Size of the output image.
-
-    sel.normalize           = False % Normalize (0 mean, std = 1)
-    sel.histeq              = False % Histogram equalization
-    sel.histmatch_col_index = []    % Histogram match reference column index
-    sel.class_range         = []    % Class range for training database or all (tr, val, te)
-    sel.val_class_range     = []    % Class range for validation database
-    sel.te_class_range      = []    % Class range for testing database
-    sel.pre_process_script  = []    % Custom preprocessing script
-    %}
+    % Selection denotes the selection paramters for a database.
+	%
+	
     properties (SetAccess = public)
         tr_col_indices      % Training column indices
         tr_noise_rate       % Rate or noise types for column index
         tr_occlusion_rate   % Occlusion rate for column index
+        tr_occlusion_type   % Occlusion type ('t':top, 'b':bottom, 'l':left, 'r':right)
         tr_out_col_indices  % Training target column indices
         val_col_indices     % Validation column indices
         val_out_col_indices % Validation target column indices
@@ -66,6 +36,7 @@ classdef Selection < handle
         self.tr_col_indices      = [];      % Training column indices
         self.tr_noise_rate       = [];      % Rate or noise types for column index
         self.tr_occlusion_rate   = [];      % Occlusion rate for column index
+        self.tr_occlusion_type   = [];      % Occlusion type ('t':top, 'b':bottom, 'l':left, 'r':right)
         self.tr_out_col_indices  = [];      % Training target column indices
         self.val_col_indices     = [];      % Validation column indices
         self.val_out_col_indices = [];      % Validation target column indices
@@ -94,6 +65,7 @@ classdef Selection < handle
         sel.tr_col_indices      = self.tr_col_indices;
         sel.tr_noise_rate       = self.tr_noise_rate;
         sel.tr_occlusion_rate   = self.tr_occlusion_rate;
+        sel.tr_occlusion_type   = self.tr_occlusion_type;
         sel.tr_out_col_indices  = self.tr_out_col_indices;
         sel.val_col_indices     = self.val_col_indices;
         sel.val_out_col_indices = self.val_out_col_indices;
@@ -134,6 +106,7 @@ classdef Selection < handle
         if (isequal(self.tr_col_indices, sel.tr_col_indices) && ...
             isequal(self.tr_noise_rate, sel.tr_noise_rate) && ...
             isequal(self.tr_occlusion_rate, sel.tr_occlusion_rate) && ...
+            isequal(self.tr_occlusion_type, sel.tr_occlusion_type) && ...
             isequal(self.tr_out_col_indices, sel.tr_out_col_indices) && ...
             isequal(self.val_col_indices, sel.val_col_indices) && ...
             isequal(self.val_out_col_indices, sel.val_out_col_indices) && ...
