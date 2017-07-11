@@ -17,7 +17,7 @@ classdef PCA < nnf.alg.MCC
     	%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         % Public Interface
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        function W = l2(nndb, info) 
+        function [W, m] = l2(nndb, info) 
             % L2: leanrs the PCA subspace with l2-norm. 
             %
             % Parameters
@@ -39,6 +39,8 @@ classdef PCA < nnf.alg.MCC
             % W : 2D matrix -double
             %     Projecttion matrix.
          	%
+            % m : vector -double
+            %     Mean vector.
             %
             % Examples
             % --------
@@ -54,7 +56,7 @@ classdef PCA < nnf.alg.MCC
             if (nargin < 2), info = []; end
                                 
             % Fetch eigen faces
-            W = PCA.eig_face_core(nndb.features, info);
+            [W,~,m] = PCA.eig_face_core(nndb.features, info);
             
             % Visualize eigen faces if required
             if (isfield(info,'visualize') && info.visualize)                
@@ -64,7 +66,7 @@ classdef PCA < nnf.alg.MCC
         end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-      	function W = l1(X, no_dim)
+      	function W = l1(X, no_dim) 
             % TODO: SLINDA
             
             
@@ -118,11 +120,95 @@ classdef PCA < nnf.alg.MCC
         end
     
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        function nndb_te_r = l2_reconst(W, m, nndb_te, info) 
+            % L2_RECONST: Reconstruct occluded faces with PCA (l2-norm). 
+            %   Preconditions: Occlusion filter `info.oc_filter` must be provided.
+            %
+            % Parameters
+            % ----------
+            % W : 2D matrix -double
+            %     Projecttion matrix.
+            % 
+            % m : vector -double
+            %     Mean vector of the training database.
+            % 
+            % nndb_te : nnf.db.NNdb
+            %     Data object that contains the te database.
+            %
+            % info : struct
+            %     Provide additional information to perform PCA. (Default value = []).    
+            %        
+            %     Info Structure (with defaults)
+            %     -----------------------------------
+            %     inf.ReducedDim = 0;     % No of dimension (0 = keep all)  
+            %     inf.visualize  = false; % Visualize eigen faces
+            % 
+            %     % Occlusion filter properties
+            %     inf.oc_filter.percentage = 0; % Percentage
+            %     inf.oc_filter.type = 0;       % type ('t', 'b', 'l', 'r')
+            %
+            %
+            % Returns
+            % -------
+            % W : 2D matrix -double
+            %     Projecttion matrix.
+         	%
+            %
+            % Examples
+            % --------
+            % import nnf.alg.PCA;
+            % W = PCA.l2(nndb_tr)
+            %
+                        
+            % Imports            
+            import nnf.db.NNdb;
+            import nnf.db.DbSlice;
+            import nnf.alg.PCA;
+            import nnf.utl.immap;
+            
+            % Set defaults for arguments
+            if (nargin < 3), info = []; end
+            assert(isfield(info,'oc_filter'));
+            assert(isfield(info.oc_filter,'percentage'));
+                                            
+            % Fetch eigen faces
+            % [W,~,m] = PCA.eig_face_core(nndb_tr.features, info);
+                        
+            % Reconstruction
+            occlusion_rate = info.oc_filter.percentage;
+            if (isfield(info.oc_filter,'type')) 
+                occlusion_type = info.oc_filter.type;
+            else
+                occlusion_type = ''; % empty defaults to 'b'
+            end
+                        
+            h = nndb_te.h;
+            w = nndb_te.w;
+            ch = nndb_te.ch;            
+            
+            filter = DbSlice.get_occlusion_patch(h, w, class(nndb_te.db), occlusion_type, occlusion_rate);                                                                                
+            filter = repmat(filter, 1, 1, ch);
+            filter = double(diag(filter(:)));
+            S = pinv(transpose((transpose(filter*W)*(filter*W))))*transpose(filter*W)* ...
+                bsxfun(@minus, filter*nndb_te.features, filter*m);
+            
+            db_te_r = bsxfun(@plus, W * S, m);
+            db_te_r = reshape(uint8(db_te_r), h, w, ch, []);
+            nndb_te_r = NNdb('te_reconst', db_te_r, nndb_te.n_per_class, true, [], nndb_te.format);
+            
+            % Visualize eigen faces if required
+            if (isfield(info,'visualize') && info.visualize)
+                imdb = uint8(reshape(W*255 + min(min(W) + 10), nndb.h, nndb.w, nndb.ch, []));
+                figure, immap(imdb, 3, 5);
+            end
+        end
+        
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%     
     end
     
     methods (Access = private, Static)
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        function [efaces] = eig_face_core(X, info) 
+        function [efaces, evalues, sample_mean] = eig_face_core(X, info) 
             %EIG_FACE_CORE: performs eigen face learning.
             
             % Imports
@@ -133,7 +219,8 @@ classdef PCA < nnf.alg.MCC
             
             % Perform PCA
             options.ReducedDim = info.ReducedDim;   
-            [efaces,~] = DengCai.PCA(X', options); % Raw major data matrix
+            [efaces, evalues, sample_mean] = DengCai.PCA(X', options); % Raw major data matrix
+            sample_mean = sample_mean';
         end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

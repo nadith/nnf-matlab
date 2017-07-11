@@ -37,6 +37,14 @@ accurary = Util.test(W, nndb_tr, nndb_te)
 % features_te = reshape(nndb_te.db, nndb_tr.h * nndb_tr.w * nndb_tr.ch, nndb_te.n);
 % MPCA(double(features_tr)/255, unique(nndb_tr.n_per_class), double(features_te)/255, nndb_te.cls_lbl);
 
+% PCA Reconstruction (Occluded images)
+import nnf.alg.PCA;
+info = [];
+[W, m] = PCA.l2(nndb_tr);
+info.oc_filter.percentage = 0.5;
+info.oc_filter.type = 'b'; % ('t':top, 'b':bottom, 'l':left, 'r':right) occlusion
+nndb_prob_r = PCA.l2_reconst(W, m, nndb_te, info); % Reconstruct
+
 %% KPCA
 import nnf.alg.KPCA;
 info = [];
