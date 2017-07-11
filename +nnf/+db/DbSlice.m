@@ -497,6 +497,13 @@ classdef DbSlice
             sel.class_range    = [1:10];    % First ten identities 
             [nndb_tr, ~, nndb_te, ~, ~, ~, ~] = DbSlice.slice(nndb, sel);
             
+            %
+            % Select 1st and 2nd image from 1st class and 2nd, 3rd and 5th image from 2nd class for training 
+            nndb = NNdb('original', imdb_8, 8, true);
+            sel = Selection()
+            sel.tr_col_indices      = {[1 2], [2 3 5]};
+            sel.class_range         = [1:2];
+            [nndb_tr, ~, ~, ~, ~, ~, ~] = DbSlice.slice(nndb, sel);
             
             % 
             % Select 1st 2nd 4th images of identities denoted by class_range for training.

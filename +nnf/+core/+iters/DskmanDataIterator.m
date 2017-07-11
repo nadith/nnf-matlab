@@ -81,7 +81,7 @@ classdef DskmanDataIterator < nnf.core.iters.DataIterator
             % cls_ranges[1] = val_cls_range
             % cls_ranges[2] = te_cls_range
             self.cls_ranges = [];
-            self.col_ranges = [];
+            self.cls_ranges = [];
 
             % Unions of class ranges and col ranges
             self.union_cls_range = [];
@@ -105,7 +105,7 @@ classdef DskmanDataIterator < nnf.core.iters.DataIterator
             % List of class ranges
             self.cls_ranges = cls_ranges;
             self.col_ranges = col_ranges;
-
+            
             % List of the ranges max
             self.cls_ranges_max = self.ranges_max(cls_ranges);
             self.col_ranges_max = self.ranges_max(col_ranges);
@@ -229,6 +229,7 @@ classdef DskmanDataIterator < nnf.core.iters.DataIterator
                             self.filter_datasets_by_cls_col_idx( ...
                                                             self.cls_idx__, ...
                                                             col_idx, ...
+                                                            (self.i__- 1), ...
                                                             self.clses_visited__, ...
                                                             self.dataset_count__);
 
@@ -266,7 +267,6 @@ classdef DskmanDataIterator < nnf.core.iters.DataIterator
             % Release internal resources used by the iterator.
             % release@nnf.core.iters.DataIterator(pp_params);
             self.cls_ranges = [];
-            self.col_ranges = [];
             self.cls_ranges_max = [];
         	self.col_ranges_max = [];
             self.union_cls_range = [];
@@ -295,12 +295,28 @@ classdef DskmanDataIterator < nnf.core.iters.DataIterator
             for ri=1:numel(ranges)
                 % range can be enum-Select.ALL|... or numpy.array([])
                 range = ranges{ri};
-                if (~isempty(range) && ... 
-                    (~(isscalar(range) && isa(range, 'Select'))))
-                    ranges_max(ri) = max(range);
+                
+                if (~iscell(range))
+                    if (~isempty(range) && ... 
+                        (~(isscalar(range) && isa(range, 'Select'))))
+                        ranges_max(ri) = max(range);
+                    else
+                        ranges_max(ri) = 0;
+                    end
+                    
                 else
-                    ranges_max(ri) = 0;
+                    % range = {[1 2 3], [4 6]};
+                    for i=1:numel(range)
+                        range_vec = range{i};
+                        if (~isempty(range_vec) && ... 
+                            (~(isscalar(range_vec) && isa(range_vec, 'Select'))))
+                            ranges_max(ri) = max([ranges_max(ri) range_vec]);
+                        else
+                            ranges_max(ri) = 0;
+                        end
+                    end
                 end
+                    
             end
         end
             
@@ -321,12 +337,26 @@ classdef DskmanDataIterator < nnf.core.iters.DataIterator
                     continue;
                 end
 
-                if (isscalar(range) && isa(range, 'Select'))
-                    res = range;
-                    return
+                if (~iscell(range))
+                    if (isscalar(range) && isa(range, 'Select'))
+                        res = range;
+                        return
+                    end
+                    
+                    res = union(res, range);
+                    
+                else
+                    % range = {[1 2 3], [4 6]};
+                    for i=1:numel(range)
+                        range_vec = range{i};
+                        if (isscalar(range_vec) && isa(range_vec, 'Select'))
+                            res = range_vec;
+                            return
+                        end
+                        
+                        res = union(res, range_vec);
+                    end
                 end
-
-                res = union(res, range);
             end 
             
             % union with a empty list returns a column vector
@@ -343,7 +373,7 @@ classdef DskmanDataIterator < nnf.core.iters.DataIterator
                 col_range = [];
             end
 
-            if (~isempty(col_range))
+            if (~isempty(col_range))                                
                 if (isscalar(col_range) && isa(col_range, 'Select'))
                     ratio = 1;
                     if (col_range == Select.PERCENT_40)
@@ -396,6 +426,7 @@ classdef DskmanDataIterator < nnf.core.iters.DataIterator
                                                             self, ...
                                                             cls_idx, ...
                                                             col_idx, ...
+                                                            cls_counter, ...
                                                             clses_visited, ...
                                                             dataset_count)
             % Filter range indices by class index (cls_idx) and coloumn index (col_index).
@@ -461,9 +492,14 @@ classdef DskmanDataIterator < nnf.core.iters.DataIterator
                     (numel(intersect(cls_idx, cls_range)) ~= 0))                
 
                     % col_range can be enum-Select.ALL or []
-                    col_range = self.col_ranges{ri};
+                    col_range = self.col_ranges{ri};                   
                     if (isempty(col_range)); continue; end
 
+                    if (iscell(col_range))
+                        % col_range = {[1 2 3], [4 6]};
+                        col_range = col_range{cls_counter};
+                    end 
+                
                     % Dataset.TR|VAL|TE|...
                     edataset = Dataset.enum(ri);
 
