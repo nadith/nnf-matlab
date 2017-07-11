@@ -260,7 +260,7 @@ classdef (Abstract) DAERegModel < handle
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         % Public Interface       
        	%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        function self = DAERegModel(name, nndbs, split_val_data, fine_tune)
+        function self = DAERegModel(name, nndbs, split_val_data, fine_tune, indices)
             % Constructs a DAERegModel object.
             %
             % Parameters
@@ -282,6 +282,9 @@ classdef (Abstract) DAERegModel < handle
             if (nargin < 4)
                 fine_tune = true;
             end
+            if (nargin < 5)
+                indices = []; 
+            end
             
             self.name = name;
             self.nndbs = nndbs;
@@ -294,7 +297,11 @@ classdef (Abstract) DAERegModel < handle
             rng('default');
             
             % Init
-            self.init(nndbs);
+			if isempty(indices)
+            	self.init(nndbs);
+			else
+				self.init(nndbs,indices);
+			end
         end        
        
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%                
@@ -607,8 +614,7 @@ classdef (Abstract) DAERegModel < handle
             loaded = []; deepnet = [];
             if (isfield(nncfg, 'load_from')); loaded = load(nncfg.load_from); end
             if (isfield(nncfg, 'load_deepnet') && nncfg.load_deepnet)
-                if (isempty(loaded)); error("Please specify 'nncfg.load_from'"); end                
-                %pretr_nets = loaded.pretr_nets;
+                if (isempty(loaded)); error("Please specify 'nncfg.load_from'"); end                                
                 tr_stats = loaded.tr_stats;
                 deepnet = loaded.deepnet;
             end

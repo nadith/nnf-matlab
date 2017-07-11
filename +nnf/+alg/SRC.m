@@ -15,7 +15,7 @@ classdef SRC
     	%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         % Public Interface
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        function [accuracy] = l1(nndb_g, nndb_p, info) 
+        function [accuracy, dist] = l1(nndb_g, nndb_p, info) 
             % L1: performs SRC with l1-norm     
             % TODO: return sparse coefficient and perform the recognition in Util class
             %
@@ -57,8 +57,38 @@ classdef SRC
             if (~isfield(info,'lambda')); info.lambda = 0.01; end; 
             
             coeff = SRC.train_lasso(nndb_g.features, nndb_p.features, info.lambda, 0, 0);
-            accuracy = SRC.lass_recogn(nndb_g.features, nndb_p.features, nndb_g.cls_lbl, nndb_p.cls_lbl, coeff, 2, 0, 0);
-                        
+            [accuracy, ~, dist] = SRC.lass_recogn(nndb_g.features, nndb_p.features, nndb_g.cls_lbl, nndb_p.cls_lbl, coeff, 2, 0, 0);
+            dist = dist';
+               
+             
+            % eye_ex = eye(nndb_g.cls_n);
+            % eye_ex = repmat(eye_ex', 1, double(unique(nndb_g.n_per_class)))';
+            % eye_ex = reshape(eye_ex, nndb_g.cls_n, []);
+            % 
+            % dist = dist * eye_ex;
+            % 
+            % [~, indices] = min(dist, [], 2);
+            % assert(numel(indices) == nndb_p.n);
+            % 
+            % % To store the verification result
+            % v = uint8(zeros(1, nndb_p.n));
+            % 
+            % for te_idx=1:nndb_p.n
+            %     idx = indices(te_idx);
+            % 
+            %     % Set the verification result
+            %     v(te_idx) = ((nndb_g.cls_lbl(idx) == nndb_p.cls_lbl(te_idx)));
+            % end
+            % 
+            % % Calculate accuracy
+            % accuracy = (sum(v) / nndb_p.n) * 100;
+            
+            
+            
+            
+            
+            
+            
             % TODO:
             %
             % Model selection (with different lambda)
@@ -99,8 +129,7 @@ classdef SRC
             temp = sqrt(sum(X.^2,1));
             for i = 1 : size(X,2)
                 X(:,i) = X(:,i)/temp(i);
-            end;
-            return;
+            end
         end
 
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -169,35 +198,35 @@ classdef SRC
         end
 
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        function [ rate, label, dist_matrix ] = lass_recogn(R,E,lr,le, xx, p, pca, error )
+        function [ rate, label, dist_matrix ] = lass_recogn(D, B, ld, lb, coeff, p_norm, pca, error )
 
             % Imports
             import nnf.alg.SRC;
             
             if (error) % For handling the occlusion or error with SRC
-                dim1 = size(R, 1);
-                R = [R eye(dim1)]; 
+                dim1 = size(D, 1);
+                D = [D eye(dim1)]; 
             end
 
-            [R,E] = SRC.pre_process(R,E,pca);
+            [D, B] = SRC.pre_process(D, B, pca);
 
-            d = size(xx,2); % No. of test samples
+            d = size(coeff,2); % No. of test samples
             rate = zeros(1,d);
             label = zeros(1,d);
-            idGroup = unique(lr(1,:)); idNum = length(idGroup);    
-            dist_matrix = zeros(idNum, d); % IMPORTANT: Consider only the the 1st image of each class in the gallery.
+            idGroup = unique(ld(1,:)); idNum = length(idGroup);    
+            dist_matrix = zeros(idNum, d); % Residual norm(..) for each class.
 
             for i = 1 : d
-                x = xx(:,i);        
-                [temp, dist_matrix(:, i), ~] = SRC.src(R,E(:,i),lr(1,:),x,p);        
+                x = coeff(:,i);        
+                [temp, dist_matrix(:, i), ~] = SRC.src(D, B(:,i), ld(1,:), x, p_norm);        
                 label(i) = temp(1);
-                rate(i) = label(i) == le(1,i);
+                rate(i) = label(i) == lb(1,i);
             end
             rate = sum(rate)/d;
         end
 
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        function [ ly, residuals,r ] = src(R, y, lrid, x, p)
+        function [ ly, residuals,r ] = src(D, y, lrid, x, p)
         %  label = label(min(||y - R * xi||^2))
             % initiallization
             idGroup = unique(lrid);
@@ -208,11 +237,11 @@ classdef SRC
             xx = repmat(x,[1,idNum]);
             for i = 1 : idNum
                 idx = lrid ~= idGroup(i);
-                xx(idx,i) = 0;
+                xx(idx, i) = 0;
             end
 
             % using the coefficients to calculate residuals
-            r = repmat(y, [1, idNum]) - R*xx;
+            r = repmat(y, [1, idNum]) - D*xx;
             for i = 1 : idNum
                 residuals(i) = norm(r(:, i), p);
             end

@@ -63,11 +63,11 @@ classdef Util
             if (~isfield(info,'g_norm')); info.g_norm = false; end; 
          
             % TODO: Implement
-% % Initialize distance matrix to capture the distance
-% if (isfield(info,'dist'))
-%     assert(numel(unique(nndb_g.n_per_class)) == 1); % All classes has same n_per_class
-%     dist = zeros(nndb_g.n_per_class(1), nndb_p.n);
-% end           
+            % % Initialize distance matrix to capture the distance
+            % if (isfield(info,'dist'))
+            %     assert(numel(unique(nndb_g.n_per_class)) == 1); % All classes has same n_per_class
+            %     dist = zeros(nndb_g.n_per_class(1), nndb_p.n);
+            % end           
             
             % Project the gallery/probe images
             gp_X =  [W1' * nndb_g1.features  W2' * nndb_g2.features]; % gallery images
@@ -164,7 +164,7 @@ classdef Util
             % Initialize distance matrix to capture the distance
             if (isfield(info,'dist'))
                 assert(numel(unique(nndb_g.n_per_class)) == 1); % All classes has same n_per_class
-                dist = zeros(nndb_g.n_per_class(1), nndb_p.n);
+                dist = zeros(nndb_p.n, nndb_g.n);
             end           
             
             % Project the gallery images
@@ -235,9 +235,8 @@ classdef Util
 
                 % Save the distance if required
                 if (isfield(info,'dist'))
-                    dist(:, te_idx) = gp_diff';
-                end
-                
+                    dist(te_idx, :) = gp_diff;
+                end                
 
                 % Set the verification result
                 v(te_idx) = ((nndb_g.cls_lbl(idx) == nndb_p.cls_lbl(te_idx)));

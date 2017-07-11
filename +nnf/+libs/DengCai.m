@@ -12,7 +12,7 @@ classdef DengCai
     
     methods (Access = public, Static)
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        function [eigvector, eigvalue] = PCA(data, options) 
+        function [eigvector, eigvalue, sampleMean] = PCA(data, options) 
             %PCA: Principal Component Analysis
             %
             %	Usage:
