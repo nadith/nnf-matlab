@@ -4,8 +4,8 @@ classdef Selection < handle
 	
     properties (SetAccess = public)
         tr_col_indices      % Training column indices
-        tr_noise_rate       % Rate or noise types for column index
-        tr_occlusion_rate   % Occlusion rate for column index
+        tr_noise_rate       % Noise rate or Noise types for `tr_col_indices`
+        tr_occlusion_rate   % Occlusion rate for `tr_col_indices`
         tr_occlusion_type   % Occlusion type ('t':top, 'b':bottom, 'l':left, 'r':right)
         tr_out_col_indices  % Training target column indices
         val_col_indices     % Validation column indices

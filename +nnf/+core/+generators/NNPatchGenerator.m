@@ -38,10 +38,10 @@ classdef NNPatchGenerator
             % w : int
             %     Patch width.
             %
-            % xstrip : int
+            % xstride : int
             %     Sliding amount in pixels (x direction).
             % 
-            % ystrip : uint16
+            % ystride : uint16
             %     Sliding amount in pixels (y direction).            
             %   
             
@@ -158,7 +158,7 @@ classdef NNPatchGenerator
             
             % Imports
             import nnf.db.NNPatch;            
-            patch = NNPatch(h, w, offset);
+            patch = NNPatch(h, w, offset, false);
         end
     end
 end

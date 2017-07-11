@@ -5,11 +5,14 @@ classdef DbSlice
     % Selection Structure (with defaults)
     % -----------------------------------
     % sel.tr_col_indices        = [];   % Training column indices
-    % sel.tr_noise_rate         = [];   % Rate or noise types for the above field
+    % sel.tr_noise_rate         = [];   % Noise rate or Noise types for `tr_col_indices`
+    % sel.tr_occlusion_rate     = [];   % Occlusion rate for `tr_col_indices`
+    % sel.tr_occlusion_type     = [];   % ('t':top, 'b':bottom, 'l':left, 'r':right) for `tr_col_indices`
     % sel.tr_out_col_indices    = [];   % Training target column indices
     % sel.val_col_indices       = [];   % Validation column indices
     % sel.val_out_col_indices   = [];   % Validation target column indices
     % sel.te_col_indices        = [];   % Testing column indices
+    % sel.te_out_col_indices    = [];   % Testing target column indices
     % sel.nnpatches             = [];   % NNPatch object array
     % sel.use_rgb               = true; % Use rgb or convert to grayscale
     % sel.color_index           = [];   % Specific color indices (set .use_rgb = false)             
@@ -17,7 +20,7 @@ classdef DbSlice
     % sel.scale                 = [];   % Scaling factor (resize factor)
     % sel.normalize             = false;% Normalize (0 mean, std = 1)
     % sel.histeq                = false;% Histogram equalization
-    % sel.histmatch_col_index = []    % Histogram match reference column index
+    % sel.histmatch_col_index   = []    % Histogram match reference column index
     % sel.class_range           = [];   % Class range for training database or all (tr, val, te)
     % sel.val_class_range       = [];   % Class range for validation database
     % sel.te_class_range        = [];   % Class range for testing database
@@ -25,7 +28,7 @@ classdef DbSlice
     %
     % i.e
     % Pass a selection structure to split the nndb accordingly
-    % [nndb_tr, ~, ~, ~] = DbSlice.slice(nndb, sel);
+    % [nndb_tr, ~, ~, ~, ~, ~, ~] = DbSlice.slice(nndb, sel);
     
     % Copyright 2015-2016 Nadith Pathirage, Curtin University (chathurdara@gmail.com).    
     methods (Access = public, Static)
@@ -57,47 +60,30 @@ classdef DbSlice
             %     NNdb object that represents the dataset.
             %
             % sel : selection structure
-            %     Information to split the dataset.
-            % 
-            %     i.e
-            %       Selection Structure (with defaults)
-            %       -----------------------------------
-            %       sel.tr_col_indices      = [];   % Training column indices
-            %       sel.tr_noise_rate       = [];   % Rate or noise types for the above field
-            %       sel.tr_out_col_indices  = [];   % Training target column indices
-            %       sel.val_col_indices     = [];     % Validation column indices
-            %       sel.val_out_col_indices = [];   % Validation target column indices
-            %       sel.te_col_indices      = [];   % Testing column indices
-            %       sel.nnpatches           = [];   % NNPatch object array
-            %       sel.use_rgb             = true; % Use rgb or convert to grayscale
-            %       sel.color_index         = [];   % Specific color indices (set .use_rgb = false)             
-            %       sel.use_real            = false;% Use real valued database TODO: (if .normalize = true, Operations ends in real values)
-            %       sel.scale               = [];   % Scaling factor (resize factor)
-            %       sel.normalize           = false;% Normalize (0 mean, std = 1)
-            %       sel.histeq              = false;% Histogram equalization
-            %       sel.histmatch_col_index = []    % Histogram match reference column index
-            %       sel.class_range         = [];   % Class range for training database or all (tr, val, te)            
-            %       sel.val_class_range     = [];   % Class range for validation database
-            %       sel.te_class_range      = [];   % Class range for testing database
-            %       sel.pre_process_script  = [];   % Custom preprocessing script
-            % 
+            %     Information to split the dataset. (Ref: class documentation)            
             %
             % Returns
             % -------
-            % nndbs_tr : NNdb or cell- NNdb
+            % nndbs_tr : NNdb or vector- NNdb
             %      Training NNdb object(s). (Incase patch division is required).
             %
-            % nndbs_val : NNdb or cell- NNdb
+            % nndbs_val : NNdb or vector- NNdb
             %      Validation NNdb object(s). (Incase patch division is required).
             %
-            % nndbs_te : NNdb or cell- NNdb
+            % nndbs_te : NNdb or vector- NNdb
             %      Testing NNdb object(s). (Incase patch division is required).   
             %
-            % nndbs_tr_out : NNdb or cell- NNdb
+            % nndbs_tr_out : NNdb or vector- NNdb
             %      Training target NNdb object(s). (Incase patch division is required).
             %
-            % nndbs_val_out : NNdb or cell- NNdb
+            % nndbs_val_out : NNdb or vector- NNdb
             %      Validation target NNdb object(s). (Incase patch division is required).
+            %
+            % nndbs_te_out : NNdb or vector- NNdb
+            %      Testing target NNdb object(s). (Incase patch division is required).
+            %
+            % vector : Dataset -vector
+            %      List of dataset enums. Dataset order returned above.
             %
 
             % Imports
@@ -448,6 +434,7 @@ classdef DbSlice
             import nnf.db.DbSlice;
             import nnf.db.Selection;
             import nnf.core.generators.NNPatchGenerator;
+            import nnf.db.Noise;
                         
             % 
             % Select 1st 2nd 4th images of each identity for training.
@@ -464,17 +451,17 @@ classdef DbSlice
             sel = Selection();
             sel.tr_col_indices = [1:2 4]; %[1 2 4];             
             patch_gen = NNPatchGenerator(nndb.h, nndb.w, 33, 33, 33, 33);
-            sel.nnpatches = patch_gen.generate_patches();
+            sel.nnpatches = patch_gen.generate_nnpatches();
 
-            % Cell arrays of NNdb objects for each patch
+            % vector of NNdb objects for each patch
             [nndbs_tr, ~, ~, ~, ~, ~, ~] = DbSlice.slice(nndb, sel);
-            nndbs_tr{1}.show()
+            nndbs_tr(1).show(10, 3)
             figure, 
-            nndbs_tr{2}.show()
+            nndbs_tr(2).show(10, 3)
             figure, 
-            nndbs_tr{3}.show()
+            nndbs_tr(3).show(10, 3)
             figure,
-            nndbs_tr{4}.show() 
+            nndbs_tr(4).show(10, 3) 
             
             
             % 
