@@ -489,7 +489,7 @@ classdef (Abstract) DAERegModel < handle
                     te_db = self.nndbs{i}.features(:, self.te_indices);
 
                     % Learn whiten projection from tr_db
-                    [tr_db, W, r_info] = whiten_ex(tr_db, 1e-5, keep_dims, squash_to_zero);
+                    [tr_db, W, r_info] = whiten(tr_db, 1e-5, keep_dims, squash_to_zero);
 
                     % Apply it to val_db and te_db
                     val_db = W'* bsxfun(@minus, val_db, r_info.m);
