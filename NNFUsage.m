@@ -1,4 +1,4 @@
- % Import classes required for NNdb
+% Import classes required for NNdb
 import nnf.db.NNdb;
 import nnf.db.DbSlice;
 import nnf.db.Selection;
@@ -6,11 +6,14 @@ import nnf.db.Selection;
 % Import all algorithms in alg package
 import nnf.alg.*;
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% NNDB OPERATIONS, SLICING, ALGORITHM USAGE
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Create a NNdb database with AR database (12 images per identity)
 nndb = NNdb('original', imdb_ar, 12, true);
 sel = Selection();
-sel.tr_col_indices        = [1:8]; % [1 2 3 7 8 9 10 11 12]; 
-sel.te_col_indices        = [9:12]; % [4 5 6];
+sel.tr_col_indices        = [1:8];  % randperm(12, 8); % Random choice
+sel.te_col_indices        = [9:12]; % setdiff([1:12], sel.tr_col_indices);
 sel.use_rgb               = false;              
 sel.scale                 = 1;
 sel.histeq                = true;
@@ -19,7 +22,7 @@ sel.class_range           = [1:100];
 nndb_tr.show(10, 8)
 figure, nndb_te.show(10, 4)
 % help DbSlice.examples % For extensive help on Db slicing
-
+            
 %% PCA_L2
 import nnf.alg.PCA;
 info = [];
@@ -171,7 +174,6 @@ info.test_1D = true;
 info.plot_LDA = true;
 DCC.test_l2(info);
 
-
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % ADVANCED EXAMPLES %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -187,7 +189,11 @@ sel.tr_col_indices        = cell_indices;
 sel.class_range           = [1:cls_count];
 [nndb_tr, ~, ~, ~, ~, ~, ~] = DbSlice.slice(nndb, sel);
 figure, nndb_tr.show(10, 3);
-nndb_tr.save('IMDB_66_66_AR_3.mat');
+
+% Example 1.1: Save methods
+nndb_tr.save('IMDB_66_66_AR_3.mat');    % save the mat file
+nndb_tr.save_dir('C:\ImageDB');         % creates folder for each class
+nndb_tr.save_dir('C:\ImageDB', false);  % save all images in single folder
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Example 2: Perform LDA, project all training samples to the LDA space and visualize with TSNE.
@@ -270,12 +276,3 @@ accurary = Util.test(W, nndb_tr, nndb_te)
 import nnf.alg.PCA;
 W = PCA.l2(nndb_tr);
 accurary = Util.test(W, nndb_tr, nndb_te)
-
-
-
-
-
-
-
-
-

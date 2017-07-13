@@ -156,13 +156,13 @@ classdef DbSlice
                         sel.te_out_col_indices};
 
             % Set defaults for class ranges [val|te|tr_out|val_out]
-            [cls_ranges, col_ranges] = DbSlice.set_default_cls_range(1, cls_ranges, col_ranges);
+            [cls_ranges, col_ranges] = DbSlice.set_default_cls_range_(1, cls_ranges, col_ranges);
             
             % NOTE: TODO: Whitening the root db did not perform well (co-variance is indeed needed)
 
             % Initialize NNdb dictionary
             % i.e dict_nndbs(Dataset.TR) => {NNdb_Patch_1, NNdb_Patch_2, ...}
-            dict_nndbs = DbSlice.init_dict_nndbs(col_ranges);
+            dict_nndbs = DbSlice.init_dict_nndbs_(col_ranges);
 
             % Set patch iterating loop's max count and nnpatch list
             patch_loop_max_n = 1;
@@ -181,15 +181,6 @@ classdef DbSlice
                     patch_loop_max_n = length(sel.nnpatches);
                 end
             end
-
-            % Initialize the sample counts
-            % Ordered by REF_ORDER defined above
-            sample_counts = {uint16(ones(1, patch_loop_max_n)) ...
-                        uint16(ones(1, patch_loop_max_n)) ...
-                        uint16(ones(1, patch_loop_max_n)) ...
-                        uint16(ones(1, patch_loop_max_n)) ...
-                        uint16(ones(1, patch_loop_max_n)) ...
-                        uint16(ones(1, patch_loop_max_n))};
 
             % Initialize the generator
             data_generator.init(cls_ranges, col_ranges, true);       
@@ -213,7 +204,7 @@ classdef DbSlice
                     end
 
                     % Peform image preocessing
-                    cimg = DbSlice.preprocess_im_with_sel(cimg, cann_cimg, sel, data_generator.get_im_ch_axis());
+                    cimg = DbSlice.preprocess_im_with_sel_(cimg, cann_cimg, sel, data_generator.get_im_ch_axis());
                 end
                 
                 % Iterate through image patches
@@ -262,10 +253,7 @@ classdef DbSlice
 
                             % Update the dict_nndbs
                             dict_nndbs(uint32(edataset)) = nndbs;
-                        end               
-                                                
-                        % i.e sample_counts[Dataset.TR][pi] <= sample count for this nnpath, edataset entry                          
-                        samples = sample_counts{uint32(edataset)};
+                        end    
 
                         % Build Training DB
                         if (edataset == Dataset.TR)
@@ -275,7 +263,7 @@ classdef DbSlice
                                 isempty(tci_offsets))
                                 tci_offsets = find(sel.tr_col_indices == col_idx);
                             end
-                            
+
                             % Check whether col_idx is a noise required index 
                             noise_rate = [];
                             if (~isempty(sel.tr_noise_rate) && ...
@@ -283,7 +271,7 @@ classdef DbSlice
                                     (0 ~= sel.tr_noise_rate(tci_offsets(dsi))))
                                 noise_rate = sel.tr_noise_rate(tci_offsets(dsi));                                
                             end
-                            
+
                             % Check whether col_idx is a occlusion required index 
                             occl_rate = [];
                             occl_type = [];
@@ -291,68 +279,49 @@ classdef DbSlice
                                     (tci_offsets(dsi) <= numel(sel.tr_occlusion_rate)) && ...
                                     (0 ~= sel.tr_occlusion_rate(tci_offsets(dsi))))
                                 occl_rate = sel.tr_occlusion_rate(tci_offsets(dsi));
-                                
+
                                 if (~isempty(sel.tr_occlusion_type))
                                     occl_type = sel.tr_occlusion_type(tci_offsets(dsi));
                                 end
                             end
                             
-                           [nndbs, samples] = ...
-                                    DbSlice.build_nndb_tr(nndbs, pi, samples, is_new_class, pimg, ...
-                                                                    noise_rate, occl_rate, occl_type);                            
+                            DbSlice.build_nndb_tr_(nndbs, pi, is_new_class, pimg, ...
+                                                          noise_rate, occl_rate, occl_type);                            
 
                         % Build Training Target DB
                         elseif (edataset == Dataset.TR_OUT)
-                            [nndbs, samples] = ...
-                                DbSlice.build_nndb_tr_out(nndbs, pi, samples, is_new_class, pimg);
+                            DbSlice.build_nndb_tr_out_(nndbs, pi, is_new_class, pimg);
 
                         % Build Valdiation DB
                         elseif (edataset == Dataset.VAL)
-                            [nndbs, samples] = ...
-                                DbSlice.build_nndb_val(nndbs, pi, samples, is_new_class, pimg);
+                            DbSlice.build_nndb_val_(nndbs, pi, is_new_class, pimg);
 
                         % Build Valdiation Target DB    
                         elseif (edataset == Dataset.VAL_OUT)
-                            [nndbs, samples] = ...
-                                DbSlice.build_nndb_val_out(nndbs, pi, samples, is_new_class, pimg);
+                            DbSlice.build_nndb_val_out_(nndbs, pi, is_new_class, pimg);
 
                         % Build Testing DB
                         elseif (edataset == Dataset.TE)
-                            [nndbs, samples] = ...
-                                DbSlice.build_nndb_te(nndbs, pi, samples, is_new_class, pimg);
+                            DbSlice.build_nndb_te_(nndbs, pi, is_new_class, pimg);
 
                         % Build Testing Target DB
                         elseif (edataset == Dataset.TE_OUT)
-                            [nndbs, samples] = ...
-                                DbSlice.build_nndb_te_out(nndbs, pi, samples, is_new_class, pimg);
+                            DbSlice.build_nndb_te_out_(nndbs, pi, is_new_class, pimg);
+                            
                         end
-                        
-                        % Set the updated samples value
-                        sample_counts{uint32(edataset)} = samples;
                     end
                 end
                 [cimg, ~, cls_idx, col_idx, datasets, stop] = data_generator.next();
             end
 
-            % Update the fields that depend on core db tensor
-            nndbss = values(dict_nndbs);
-            for i = 1:length(dict_nndbs)
-                nndbs = nndbss{i};
-                if (isempty(nndbs)); continue; end                
-                for j =1:numel(nndbs)
-                    nndb_patch = nndbs(j);
-                    nndb_patch.init_db_fields();
-                end
-            end            
-                
-            % Returns NNdb object instead of cell array (non patch requirement)
+            % Returns NNdb object instead of NNdb array (non patch requirement)
             if (isempty(sel.nnpatches))      
-                nndbs_tr = DbSlice.p0_nndbs(dict_nndbs, uint32(Dataset.TR));
-                nndbs_val = DbSlice.p0_nndbs(dict_nndbs, uint32(Dataset.VAL));
-                nndbs_te = DbSlice.p0_nndbs(dict_nndbs, uint32(Dataset.TE));
-                nndbs_tr_out = DbSlice.p0_nndbs(dict_nndbs, uint32(Dataset.TR_OUT));
-                nndbs_val_out = DbSlice.p0_nndbs(dict_nndbs, uint32(Dataset.VAL_OUT));
-                nndbs_te_out = DbSlice.p0_nndbs(dict_nndbs, uint32(Dataset.TE_OUT));
+                nndbs_tr = DbSlice.p0_nndbs_(dict_nndbs, uint32(Dataset.TR));
+                nndbs_val = DbSlice.p0_nndbs_(dict_nndbs, uint32(Dataset.VAL));
+                nndbs_te = DbSlice.p0_nndbs_(dict_nndbs, uint32(Dataset.TE));
+                nndbs_tr_out = DbSlice.p0_nndbs_(dict_nndbs, uint32(Dataset.TR_OUT));
+                nndbs_val_out = DbSlice.p0_nndbs_(dict_nndbs, uint32(Dataset.VAL_OUT));
+                nndbs_te_out = DbSlice.p0_nndbs_(dict_nndbs, uint32(Dataset.TE_OUT));
                 edatasets = [Dataset.TR Dataset.VAL Dataset.TE Dataset.TR_OUT Dataset.VAL_OUT Dataset.TE_OUT];
                 return;
             end  
@@ -367,7 +336,7 @@ classdef DbSlice
         end    
    
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        function cimg = preprocess_im_with_sel(cimg, cann_cimg, sel, ch_axis)
+        function cimg = preprocess_im_with_sel_(cimg, cann_cimg, sel, ch_axis)
             % Peform image preocessing.
         
             % Imports
@@ -383,9 +352,9 @@ classdef DbSlice
             end
 
             % Color / Gray Scale Conversion (if required)
-            cimg = DbSlice.process_color(cimg, sel);
+            cimg = DbSlice.process_color_(cimg, sel);
             if (~isempty(cann_cimg))
-                cann_cimg = DbSlice.process_color(cann_cimg, sel);
+                cann_cimg = DbSlice.process_color_(cann_cimg, sel);
             end
 
             % Image pre-processing parameters                        
@@ -676,11 +645,11 @@ classdef DbSlice
         end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    end
+    end    
     
-	methods (Access = private, Static)
+	methods (Access = protected, Static)
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        function nndbs = p0_nndbs(dict_nndbs, ekey)
+        function nndbs = p0_nndbs_(dict_nndbs, ekey)
             if (~isempty(dict_nndbs(ekey)))
                 nndbs = dict_nndbs(ekey);
                 nndbs = nndbs(1);
@@ -690,7 +659,7 @@ classdef DbSlice
         end
                 
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        function  [cls_ranges, col_ranges] = set_default_cls_range(default_idx,  cls_ranges, col_ranges)
+        function  [cls_ranges, col_ranges] = set_default_cls_range_(default_idx,  cls_ranges, col_ranges)
             % SET_DEFAULT_RANGE: Sets the value of the class range at default_idx 
             % to the class ranges at other indices [val|te|tr_out|val_out]
             
@@ -703,7 +672,7 @@ classdef DbSlice
         end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        function dict_nndbs = init_dict_nndbs(col_ranges)
+        function dict_nndbs = init_dict_nndbs_(col_ranges)
             % DICT_NNDBS: Initializes a dictionary that tracks the `nndbs` for each dataset.
             % 
             %     i.e dict_nndbs[Dataset.TR] => [NNdb_Patch_1, NNdb_Patch_2, ...]
@@ -729,14 +698,12 @@ classdef DbSlice
 
             % Iterate through ranges
             for ri=1:numel(col_ranges)                
-                dict_nndbs(ri) = NNdb.empty; %cell(0, 0);
-                %...
-                %   DbSlice.init_nndb(Dataset.str(ekey), sel, nndb, n_per_class, cls_range_size, true);
+                dict_nndbs(ri) = NNdb.empty;
             end
         end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        function [img] = process_color(img, sel) 
+        function [img] = process_color_(img, sel) 
             % PROCESS_COLOR: performs color related functions.
             %            
             % Returns
@@ -767,37 +734,9 @@ classdef DbSlice
                 img = X;  
             end
         end
-
-        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        function update_nndb_prop(nndb, is_new_class, sample_n)
-            % UPDATE_NNDB_PROP: update some properties of nndb
-            % Set class start, and class counts of nndb
-            if (is_new_class)
-                % Set class start(s) of nndb, dynamic expansion
-                cls_st = sample_n;
-                if (isempty(nndb.cls_st)); nndb.cls_st = uint32([]); end;
-                nndb.cls_st = cat(1, nndb.cls_st, uint32([cls_st]));
-
-                % Set class count
-                nndb.cls_n = nndb.cls_n + 1;
-
-                % Set n_per_class(s) of nndb, dynamic expansion
-                n_per_class = 0;
-                if (isempty(nndb.n_per_class)); nndb.n_per_class = uint16([]); end;
-                nndb.n_per_class = cat(1, nndb.n_per_class, uint16([n_per_class]));
-            end    
-
-            % Increment the n_per_class current class
-            nndb.n_per_class(end) = nndb.n_per_class(end) + 1;
-
-            % Set class label of nndb, dynamic expansion
-            cls_lbl = nndb.cls_n;
-            if (isempty(nndb.cls_lbl)); nndb.cls_lbl = uint16([]); end;
-            nndb.cls_lbl = cat(2, nndb.cls_lbl, uint16([cls_lbl]));
-        end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        function [nndbs, samples] = build_nndb_tr(nndbs, pi, samples, is_new_class, img, ...
+        function nndbs = build_nndb_tr_(nndbs, pi, is_new_class, img, ...
                                                         noise_rate, occlusion_rate, occlusion_type) 
             % BUILD_NNDB_TR: builds the nndb training database.
             %          
@@ -805,9 +744,6 @@ classdef DbSlice
             % -------
             % nndbs : cell- NNdb
             %      Updated NNdb objects.
-            %
-            % samples : vector -uint16
-            %      Updated image count vector.
             %  
             
             % Imports 
@@ -853,7 +789,7 @@ classdef DbSlice
                     sw = 1 + rand()*(w-cs(2)-1);
 
                     % Set the corruption
-                    cimg = uint8(DbSlice.rand_corrupt(cs(1), cs(2)));
+                    cimg = uint8(DbSlice.rand_corrupt_(cs(1), cs(2)));
 
                     if (ch == 1)
                         img(sh:sh+cs(1)-1, sw:sw+cs(2)-1) = cimg;
@@ -869,13 +805,11 @@ classdef DbSlice
             nndb.add_data(img);
 
             % Update the properties of nndb
-            DbSlice.update_nndb_prop(nndb, is_new_class, samples(pi));
-        
-            samples(pi) = samples(pi) + 1;        
+            nndb.update_attr(is_new_class);        
         end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%        
-        function img = rand_corrupt(height, width) 
+        function img = rand_corrupt_(height, width) 
             % RAND_CORRUPT: corrupts the image with a (height, width) block.
             %            
             % Returns
@@ -905,7 +839,7 @@ classdef DbSlice
         end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        function [nndbs, samples] = build_nndb_tr_out(nndbs, pi, samples, is_new_class, img)
+        function nndbs = build_nndb_tr_out_(nndbs, pi, is_new_class, img)
             % BUILD_NNDB_TR_OUT: builds the nndb training target database.
             %            
             % Returns
@@ -913,9 +847,6 @@ classdef DbSlice
             % nndbs : cell- NNdb
             %      Updated NNdb objects.
             %
-            % samples : vector -uint16
-            %      Updated image count vector.
-            %
             
             % Imports 
             import nnf.db.DbSlice;
@@ -925,13 +856,11 @@ classdef DbSlice
             nndb.add_data(img);
             
             % Update the properties of nndb
-            DbSlice.update_nndb_prop(nndb, is_new_class, samples(pi))
-        
-            samples(pi) = samples(pi) + 1;
+            nndb.update_attr(is_new_class);
         end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        function [nndbs, samples] = build_nndb_val(nndbs, pi, samples, is_new_class, img)
+        function nndbs = build_nndb_val_(nndbs, pi, is_new_class, img)
             % BUILD_NNDB_VAL: builds the nndb validation database.
             %            
             % Returns
@@ -939,9 +868,6 @@ classdef DbSlice
             % nndbs : cell- NNdb
             %      Updated NNdb objects.
             %
-            % samples : vector -uint16
-            %      Updated image count vector.
-            %
             
             % Imports 
             import nnf.db.DbSlice;
@@ -951,13 +877,11 @@ classdef DbSlice
             nndb.add_data(img);
             
             % Update the properties of nndb
-            DbSlice.update_nndb_prop(nndb, is_new_class, samples(pi))
-        
-            samples(pi) = samples(pi) + 1;
+            nndb.update_attr(is_new_class);
         end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        function [nndbs, samples] = build_nndb_val_out(nndbs, pi, samples, is_new_class, img)
+        function nndbs = build_nndb_val_out_(nndbs, pi, is_new_class, img)
             % BUILD_NNDB_VAL_OUT: builds the nndb validation target database.
             %            
             % Returns
@@ -965,9 +889,6 @@ classdef DbSlice
             % nndbs : cell- NNdb
             %      Updated NNdb objects.
             %
-            % samples : vector -uint16
-            %      Updated image count vector.
-            %
             
             % Imports 
             import nnf.db.DbSlice;
@@ -977,22 +898,17 @@ classdef DbSlice
             nndb.add_data(img);
             
             % Update the properties of nndb
-            DbSlice.update_nndb_prop(nndb, is_new_class, samples(pi))
-        
-            samples(pi) = samples(pi) + 1;
+            nndb.update_attr(is_new_class);
         end        
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        function [nndbs, samples] = build_nndb_te(nndbs, pi, samples, is_new_class, img)
+        function nndbs = build_nndb_te_(nndbs, pi, is_new_class, img)
             % BUILD_NNDB_TE: builds the testing database.
             %            
             % Returns
             % -------
             % nndbs : cell- NNdb
             %      Updated NNdb objects.
-            %
-            % samples : vector -uint16
-            %      Updated image count vector.
             %
             
             % Imports 
@@ -1003,22 +919,17 @@ classdef DbSlice
             nndb.add_data(img);
             
             % Update the properties of nndb
-            DbSlice.update_nndb_prop(nndb, is_new_class, samples(pi))
-        
-            samples(pi) = samples(pi) + 1;
+            nndb.update_attr(is_new_class);
         end
     
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        function [nndbs, samples] = build_nndb_te_out(nndbs, pi, samples, is_new_class, img)
+        function nndbs = build_nndb_te_out_(nndbs, pi, is_new_class, img)
             % BUILD_NNDB_TE: builds the testing database.
             %            
             % Returns
             % -------
             % nndbs : cell- NNdb
             %      Updated NNdb objects.
-            %
-            % samples : vector -uint16
-            %      Updated image count vector.
             %
             
             % Imports 
@@ -1029,9 +940,7 @@ classdef DbSlice
             nndb.add_data(img);
             
             % Update the properties of nndb
-            DbSlice.update_nndb_prop(nndb, is_new_class, samples(pi))
-        
-            samples(pi) = samples(pi) + 1;
+            nndb.update_attr(is_new_class);      
         end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

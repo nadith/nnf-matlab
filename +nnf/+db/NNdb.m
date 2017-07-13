@@ -30,15 +30,14 @@ classdef NNdb < handle
         cls_n;          % (s) Class Count
   	end
                 
-    properties (SetAccess = public, Dependent) 
-        matlab_db;      % Matlab Compatible db Format
-        python_db;      % Python Compatible db Format
-        features;
-        im_ch_axis;     % Image channel axis
-        db_scipy;
-        db_convo_tf;
-        db_convo_th;
-        features_scipy;
+    properties (SetAccess = public, Dependent)
+        db_convo_th;    % db compatible for convolutional networks.
+        db_convo_tf;    % db compatible for convolutional networks.        
+        db_scipy;       % db compatible for scipy library.
+        features_scipy; % 2D feature matrix (double) compatible for scipy library.
+        db_matlab;      % db compatible for matlab.
+        features;       % 2D feature matrix (double) compatible for matlab.
+        im_ch_axis;     % Image channel index for an image.
     end
 
     methods (Access = public) 
@@ -163,27 +162,38 @@ classdef NNdb < handle
             nndb = NNdb('merged', db, [], false, cls_lbl, self.format);            
         end
         
-        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%        
-        function init_db_fields(self)
-            import nnf.db.Format;
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        function update_attr(self, is_new_class, sample_n)
+            % UPDATE_NNDB_ATTR: update nndb attributes. Used when building the nndb dynamically.
+            %
             
-            if (self.format == Format.H_W_CH_N)
-                [self.h, self.w, self.ch, self.n] = size(self.db);
+            % Initialize db related fields
+            self.init_db_fields__();
+                
+            % Set class start, and class counts of nndb
+            if (is_new_class) 
+                % Set class start(s) of nndb, dynamic expansion
+                cls_st = self.n; % current sample count
+                if (isempty(self.cls_st)); self.cls_st = uint32([]); end
+                self.cls_st = cat(2, self.cls_st, uint32([cls_st]));
 
-            elseif (self.format == Format.H_N)
-                self.w = 1;
-                self.ch = 1;
-                [self.h, self.n] = size(self.db);
+                % Set class count
+                self.cls_n = self.cls_n + 1;
 
-            elseif (self.format == Format.N_H_W_CH)
-                [self.n, self.h, self.w, self.ch] = size(self.db);
+                % Set n_per_class(s) of nndb, dynamic expansion
+                n_per_class = 0;
+                if (isempty(self.n_per_class)); self.n_per_class = uint16([]); end
+                self.n_per_class = cat(2, self.n_per_class, uint16([n_per_class]));
+            end    
 
-            elseif (self.format == Format.N_H)
-                self.w = 1;
-                self.ch = 1;
-                [self.n, self.h] = size(self.db);
-            end
-        end
+            % Increment the n_per_class current class
+            self.n_per_class(end) = self.n_per_class(end) + 1;
+
+            % Set class label of nndb, dynamic expansion
+            cls_lbl = self.cls_n;
+            if (isempty(self.cls_lbl)); self.cls_lbl = uint16([]); end
+            self.cls_lbl = cat(2, self.cls_lbl, uint16([cls_lbl]));
+        end       
             
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         function data = get_data_at(self, si) 
@@ -467,11 +477,62 @@ classdef NNdb < handle
         end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        function save(self, filepath)
-            imdb_obj.db = self.db;
+        function save(self, filepath) 
+            % Save images to a matfile. 
+            % 
+            % Parameters
+            % ----------
+            % filepath : string
+            %     Path to the file.
+            %
+            
+            imdb_obj.db = self.db_matlab;
             imdb_obj.class = self.cls_lbl;
-            imdb_obj.im_per_class = unique(self.n_per_class);
+            imdb_obj.im_per_class = self.n_per_class;
             save(filepath, 'imdb_obj');
+        end
+        
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        function save_to_dir(self, filepath, create_cls_dir) 
+            % Save images to a directory. 
+            % 
+            % Parameters
+            % ----------
+            % path : string
+            %     Path to directory.
+            % 
+            % create_cls_dir : bool, optional
+            %     Create directories for individual classes. (Default value = True).
+            %
+            
+            % Set defaults
+            if (nargin < 3); create_cls_dir = true; end
+            
+            % Make a new directory to save images
+            if (~isempty(filepath) && exist(filepath, 'dir') == 0)
+                mkdir(filepath);
+            end
+            
+            img_i = 1;
+            for cls_i=1:self.cls_n
+
+                cls_name = num2str(cls_i); 
+                if (create_cls_dir && exist(fullfile(filepath, cls_name), 'dir') == 0)
+                    mkdir(fullfile(filepath, cls_name));
+                end
+
+                for cls_img_i=1:self.n_per_class(cls_i)
+                    if (create_cls_dir)
+                        img_name = num2str(cls_img_i);
+                        imwrite(self.get_data_at(img_i), fullfile(filepath, cls_name, [img_name '.jpg']), 'jpg');
+                    else                
+                        img_name = [cls_name '_' num2str(cls_img_i)];
+                        imwrite(self.get_data_at(img_i), fullfile(filepath, [img_name '.jpg']), 'jpg');
+                    end
+                    
+                    img_i = img_i + 1;
+                end
+            end
         end
             
        	%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -685,7 +746,33 @@ classdef NNdb < handle
         end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    end       
+    end
+    
+    methods (Access = private)
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%        
+        function init_db_fields__(self)
+            import nnf.db.Format;
+            
+            if (self.format == Format.H_W_CH_N)
+                [self.h, self.w, self.ch, self.n] = size(self.db);
+
+            elseif (self.format == Format.H_N)
+                self.w = 1;
+                self.ch = 1;
+                [self.h, self.n] = size(self.db);
+
+            elseif (self.format == Format.N_H_W_CH)
+                [self.n, self.h, self.w, self.ch] = size(self.db);
+
+            elseif (self.format == Format.N_H)
+                self.w = 1;
+                self.ch = 1;
+                [self.n, self.h] = size(self.db);
+            end
+        end
+        
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    end
     
     methods 
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -700,13 +787,10 @@ classdef NNdb < handle
             % N x CH x H x W
             if (self.format == Format.N_H_W_CH || self.format == Format.H_W_CH_N)
                 db = permute(self.db_scipy, [1 4 2 3]);
-                return;
-            end
-
+                
             % N x 1 x H x 1
-            if (self.format == Format.N_H || self.format == Format.H_N)
+            elseif (self.format == Format.N_H || self.format == Format.H_N)
                 db = reshape(self.db_scipy, self.n, 1, self.h, 1);
-                return;
 
             else
                 error('Unsupported db format');
@@ -743,16 +827,15 @@ classdef NNdb < handle
             % N x H x W x CH or N x H  
             if (self.format == Format.N_H_W_CH || self.format == Format.N_H)
                 db = self.db;
-                return;
-            end
-
+                
             % H x W x CH x N
-            if (self.format == Format.H_W_CH_N)
+            elseif (self.format == Format.H_W_CH_N)
                 db = permute(self.db,[4 1 2 3]);                
 
             % H x N
             elseif (self.format == Format.H_N)
                 db = permute(self.db,[2 1]);
+                
             else
                 error('Unsupported db format');
             end
@@ -760,26 +843,38 @@ classdef NNdb < handle
 
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         function db = get.features_scipy(self)
-            % db compatible for scipy library."""     
+            % 2D feature matrix (double) compatible for scipy library.   
             db = double(reshape(self.db_scipy, self.n, self.h * self.w * self.ch));
         end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        function value = get.features(self) 
-            % 2D Feature Matrix (double)
-            import nnf.db.Format;
+        function db = get.db_matlab(self)
+            % db compatible for matlab.
             
-            % N x H x W x CH or N x H
-            if (self.format == Format.N_H_W_CH || self.format == Format.N_H)
-                value = double(reshape(self.db, self.n, self.h * self.w * self.ch));
-            
-            % H x W x CH x N or H x N
-            elseif (self.format == Format.H_W_CH_N || self.format == Format.H_N)
-                value = double(reshape(self.db, self.h * self.w * self.ch, self.n));
+            % Imports
+            import nnf.db.Format; 
+
+            % H x W x CH x N or H x N  
+            if (self.format == Format.H_W_CH_N || self.format == Format.H_N)
+                db = self.db;
+
+            % N x H x W x CH
+            elseif (self.format == Format.N_H_W_CH)
+                db = permute(self.db,[2 3 4 1]);
+
+            % N x H
+            elseif (self.format == Format.N_H)
+                db = permute(self.db,[2 1]);
 
             else
-                error('Unsupported db format')
+                raise Exception("Unsupported db format");
             end
+        end        
+        
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        function db = get.features(self) 
+            % 2D feature matrix (double) compatible for matlab.
+            db = double(reshape(self.db_matlab, self.n, self.h * self.w * self.ch));
         end  
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
