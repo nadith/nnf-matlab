@@ -174,12 +174,12 @@ classdef DskmanMemDataIterator < nnf.core.iters.DskmanDataIterator
             %
             assert(cls_idx <= self.nndb.cls_n);
             
-            if (nargin < 3)
+            if (nargin < 4)
                 show_warning = true;
             end
             
             if (col_idx > self.nndb.n_per_class(cls_idx) && show_warning)
-                warning(['Class:' num2str(cls_idx) ' ImageIdx:' num2str(col_idx) 
+                warning(['Class:' num2str(cls_idx) ' ImageIdx:' num2str(col_idx) ...
                         ' is missing in the database']);
             end
 

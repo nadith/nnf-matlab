@@ -81,7 +81,7 @@ classdef DskmanDataIterator < nnf.core.iters.DataIterator
             % cls_ranges[1] = val_cls_range
             % cls_ranges[2] = te_cls_range
             self.cls_ranges = [];
-            self.cls_ranges = [];
+            self.col_ranges = [];
 
             % Unions of class ranges and col ranges
             self.union_cls_range = [];
@@ -172,7 +172,7 @@ classdef DskmanDataIterator < nnf.core.iters.DataIterator
                         % When the first col_idx is out of true range, break
                         if (~self.is_valid_col_idx_(self.cls_idx__, false))
                             self.check_and_issue_warning(self.cls_idx__, self.cls_ranges_max, ... 
-                                ['Class: >=' num2str(self.cls_idx__) ' missing in the database']);
+                                ['Class: >=' num2str(self.cls_idx__) ' are missing in the database']);
                             break;
                         end
                         
@@ -542,7 +542,8 @@ classdef DskmanDataIterator < nnf.core.iters.DataIterator
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         function check_and_issue_warning(self, idx, ranges_max, msg)
             % Check and issue a warning if `ranges_max` are invalid.
-            for rmax=1:ranges_max
+            for ri=1:numel(ranges_max)
+                rmax = ranges_max(ri);
                 if (idx <= rmax)
                     warning(msg)
                     break;
