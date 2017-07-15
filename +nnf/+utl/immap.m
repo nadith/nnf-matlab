@@ -38,10 +38,7 @@ function [image_map] = immap( X, rows, cols, scale, offset )
     % show_image_map(db, 5, 8, [], 10)
 
     % Copyright 2015-2016 Nadith Pathirage, Curtin University.
-
-    if (numel(size(X)) ~= 4)
-        error('ARG_ERR: X: 4D tensor in the format H x W x CH x N');
-    end
+    
     if (nargin < 2)
         error('ARG_ERR: rows, cols: undefined');
     end
@@ -53,9 +50,15 @@ function [image_map] = immap( X, rows, cols, scale, offset )
     if (nargin < 4), scale = []; end
     if (nargin < 5), offset = 1; end
     
-    % Fetch no of color channels
-    [h, w, ch, n] = size(X);
-
+    % If `X` is a database with many images: 4D tensor in the format `H x W x CH x N`
+    if (numel(size(X)) > 3) 
+        [h, w, ch, n] = size(X);
+        
+    else % X: `H x W x CH`: In matlab last singular dimension is ignored by default.
+        [h, w, ch] = size(X);
+        n = 1;        
+    end
+    
     % Requested image count
     im_count = rows * cols;
 
