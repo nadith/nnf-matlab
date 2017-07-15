@@ -228,9 +228,10 @@ sel.class_range           = [1:cls_count];
 figure, nndb_tr.show(10, 3);
 
 % Example 1.1: Save methods
-nndb_tr.save('IMDB_66_66_AR_3.mat');    % save the mat file
-nndb_tr.save_dir('C:\ImageDB');         % creates folder for each class
-nndb_tr.save_dir('C:\ImageDB', false);  % save all images in single folder
+nndb_tr.save('IMDB_66_66_AR_3.mat');                    % save the mat file
+nndb_tr.save_compressed('IMDB_66_66_AR_3_comp.mat');    % save the mat file (reduced size)
+nndb_tr.save_dir('C:\ImageDB');                         % creates folder for each class
+nndb_tr.save_dir('C:\ImageDB', false);                  % save all images in single folder
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Example 2: Perform LDA, project all training samples to the LDA space and visualize with TSNE.

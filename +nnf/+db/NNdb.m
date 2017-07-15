@@ -489,7 +489,31 @@ classdef NNdb < handle
             imdb_obj.db = self.db_matlab;
             imdb_obj.class = self.cls_lbl;
             imdb_obj.im_per_class = self.n_per_class;
-            save(filepath, 'imdb_obj');
+            save(filepath, 'imdb_obj', '-v7.3');
+        end
+        
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        function save_compressed(self, filepath) 
+            % Save images to a matfile. 
+            % 
+            % Parameters
+            % ----------
+            % filepath : string
+            %     Path to the file.
+            %
+            
+            imdb_obj.db = self.db_matlab;
+            
+            unq_n_per_class = unique(self.n_per_class);
+            if isscalar(unq_n_per_class)
+                imdb_obj.im_per_class = unq_n_per_class;
+                imdb_obj.class = [];
+            else            
+                imdb_obj.im_per_class = self.n_per_class;
+                imdb_obj.class = self.cls_lbl;
+            end
+            
+            save(filepath, 'imdb_obj', '-v7.3');
         end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
