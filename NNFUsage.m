@@ -177,6 +177,39 @@ DCC.test_l2(info);
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % ADVANCED EXAMPLES %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Example 0: Face alignment and cropping
+% % Desired Face: Default values
+% info.desired_face.height = 66;     
+% info.desired_face.width = 66;  
+% info.desired_face.lex_ratio = 0.25;
+% info.desired_face.rex_ratio = 0.75; 
+% info.desired_face.ey_ratio = 0.33; 
+% info.desired_face.my_ratio = 0.63;
+
+% % Face Detector: Default values
+% info.detector.show_im_fail = true;
+% info.detector.vj.MinNeighbors = 4;    % Minimum neighbours for viola jones (Matlab)
+% info.detector.vj.ScaleFactor = 1.1;   % Scale factor for viola jones (Matlab)
+% info.detector.vj.MinSize = [20 20];   % Minimum size for viola jones (Matlab)
+
+% % If filtering needed: Filter frontal pose config
+% info.filter.pose_pitch = [-8 8];
+% info.filter.pose_yaw = [-15 15];
+% info.filter.pose_roll = [-5 5];
+
+% If saving required
+info.save_path = 'C:\Aligned_DB';
+
+% Take images from a directory in the disk. (each class has a folder)
+[nndb_aln, nndb_fail, fail_cls_lbl] = FaceAligner.align('C:\ImageDB', false, info);
+
+% Take images from a NNdb in memory
+[nndb_aln, nndb_fail, fail_cls_lbl] = FaceAligner.align(nndb, true, info);
+
+% Visualize
+figure, nndb_aln.show(10, 10)
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Example 1: Select randomly unique 3 images from each class and save it to a database file
 import nnf.utl.rand_unq
 cell_indices = cell(0, 0);
