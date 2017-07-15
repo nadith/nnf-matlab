@@ -6,18 +6,22 @@ import nnf.db.Selection;
 % Import all algorithms in alg package
 import nnf.alg.*;
 
+% Import illumination normalization pre-processing function
+import nnf.utl.illumination_norm;
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% NNDB OPERATIONS, SLICING, ALGORITHM USAGE
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Create a NNdb database with AR database (12 images per identity)
 nndb = NNdb('original', imdb_ar, 12, true);
 sel = Selection();
-sel.tr_col_indices        = [1:8];  % randperm(12, 8); % Random choice
-sel.te_col_indices        = [9:12]; % setdiff([1:12], sel.tr_col_indices);
+sel.tr_col_indices        = [1:8];              % randperm(12, 8); % Random choice
+sel.te_col_indices        = [9:12];             % setdiff([1:12], sel.tr_col_indices);
 sel.use_rgb               = false;              
-sel.scale                 = 1;
+sel.scale                 = 1;                  % or [66 66]
 sel.histeq                = true;
 sel.class_range           = [1:100];
+% sel.pre_process_script  = @illumination_norm; % Refer nnf.utl.illumination_norm
 [nndb_tr, ~, nndb_te, ~, ~, ~, ~] = DbSlice.slice(nndb, sel); 
 nndb_tr.show(10, 8)
 figure, nndb_te.show(10, 4)
