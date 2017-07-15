@@ -464,15 +464,15 @@ classdef NNdb < handle
             import nnf.utl.immap;
             
             if (nargin >= 5)
-                immap(self.db, cls_n, n_per_class, scale, offset);
+                immap(self.db_matlab, cls_n, n_per_class, scale, offset);
             elseif (nargin >= 4)
-                immap(self.db, cls_n, n_per_class, scale);
+                immap(self.db_matlab, cls_n, n_per_class, scale);
             elseif (nargin >= 3)
-                immap(self.db, cls_n, n_per_class);
+                immap(self.db_matlab, cls_n, n_per_class);
             elseif (nargin >= 2)
-                immap(self.db, cls_n, 1);
+                immap(self.db_matlab, cls_n, 1);
             elseif (nargin >= 1)
-                immap(self.db, 1, 1);
+                immap(self.db_matlab, 1, 1);
             end            
         end
         
@@ -874,7 +874,7 @@ classdef NNdb < handle
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         function db = get.features(self) 
             % 2D feature matrix (double) compatible for matlab.
-            db = double(reshape(self.db_matlab, self.n, self.h * self.w * self.ch));
+            db = double(reshape(self.db_matlab, self.h * self.w * self.ch, self.n));
         end  
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
