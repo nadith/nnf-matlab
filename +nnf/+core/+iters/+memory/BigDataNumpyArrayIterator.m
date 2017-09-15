@@ -54,7 +54,7 @@ classdef BigDataNumpyArrayIterator < nnf.core.iters.memory.NumpyArrayIterator
 
             % TODO: Apply necessary transofmraiton
             %%x = self.image_data_generator.random_transform(x)
-            %x = self.image_data_generator.standardize(x)
+            x = self.image_data_generator.standardize(x);
         end
     
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

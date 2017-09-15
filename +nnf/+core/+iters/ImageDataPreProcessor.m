@@ -13,7 +13,8 @@ classdef ImageDataPreProcessor < nnf.core.iters.ImageDataGenerator
     
     properties (SetAccess = protected)
         fn_gen_coreiter_;
-        nrm_vgg16_;
+        pp_params_;
+        mapminmax_setting_;
     end
     
     properties (SetAccess = protected, Dependent)
@@ -42,15 +43,8 @@ classdef ImageDataPreProcessor < nnf.core.iters.ImageDataGenerator
             
             self = self@nnf.core.iters.ImageDataGenerator(pp_params);            
             self.fn_gen_coreiter_ = fn_gen_coreiter;
-
-            % VGG16Model specific pre-processing param
-            if (isempty(pp_params)) 
-                self.nrm_vgg16_ = false;
-            elseif (pp_params.isKey('normalize_vgg16'))                
-                self.nrm_vgg16_ = pp_params.get('normalize_vgg16');
-            else
-                self.nrm_vgg16_ = false;
-            end            
+            self.pp_params_ = pp_params;
+            self.mapminmax_setting_ = [];            
         end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -61,20 +55,30 @@ classdef ImageDataPreProcessor < nnf.core.iters.ImageDataGenerator
             self.mean = settings.mean;
             self.std = settings.std;
             self.principal_components = settings.principal_components;
-            self.map_min_max = settings.map_min_max;
+            self.mapminmax_setting_ = settings.mapminmax_setting_;
             self.whiten = settings.whiten;
         end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         function x = standardize(self, x)
             % Standardize data sample.
-            if (self.nrm_vgg16_)
+            
+            % New custom pre-processing param
+            % VGG16Model specific pre-processing param
+            if (~isempty(self.pp_params_) && ...
+                    self.pp_params_.isKey('normalize_vgg16') && ...
+                    self.pp_params_.get('normalize_vgg16')) 
                 x(0, :, :) = x(0, :, :) - 103.939;
                 x(1, :, :) = x(1, :, :) - 116.779;
                 x(2, :, :) = x(2, :, :) - 123.68;
             end
-
+            
             x = standardize@nnf.core.iters.ImageDataGenerator(self, x);
+            
+            % Map min max normalization
+            if (~isempty(self.mapminmax_setting_))
+                x = mapminmax('apply', x', self.mapminmax_setting_)';
+            end
         end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -86,7 +90,13 @@ classdef ImageDataPreProcessor < nnf.core.iters.ImageDataGenerator
             if (nargin < 3); augment = false; end
             
             fit@nnf.core.iters.ImageDataGenerator(self, X, augment, rounds, seed)
+            
             % Perform whitening/mapminmax/etc
+            if (~isempty(self.pp_params_) && ...
+                    self.pp_params_.isKey('mapminmax'))
+                    minmax_range = self.pp_params_.get('mapminmax');
+                [~, self.mapminmax_setting_] = mapminmax(X', minmax_range(1), minmax_range(2)); 
+            end
         end
     
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -117,7 +127,6 @@ classdef ImageDataPreProcessor < nnf.core.iters.ImageDataGenerator
             if (nargin < 5); params = []; end
             if (nargin < 4); nb_class = []; end
             if (nargin < 3); y = []; end
-
 
             if (isempty(self.fn_gen_coreiter_))
                 core_iter = NumpyArrayIterator(X, y, nb_class, self, params);
@@ -190,7 +199,7 @@ classdef ImageDataPreProcessor < nnf.core.iters.ImageDataGenerator
             value.mean = self.mean;
             value.std = self.std;
             value.principal_components = self.principal_components;
-            value.map_min_max = self.map_min_max;
+            value.mapminmax_setting_ = self.mapminmax_setting_;
             value.whiten = self.whiten;
         end
         

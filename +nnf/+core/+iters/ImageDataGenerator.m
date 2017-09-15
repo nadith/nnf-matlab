@@ -189,7 +189,7 @@ classdef ImageDataGenerator < handle
             end
             
             % x is a single image, so it doesn't have image number at index 0
-            img_channel_index = self.channel_index - 1
+            img_channel_index = self.channel_index - 1;
             if self.samplewise_center
                 M = mean(x, img_channel_index);
                 x = bsxfun(@minus, x, M);
