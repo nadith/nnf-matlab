@@ -648,9 +648,10 @@ classdef (Abstract) DAERegModel < handle
                     net_idx = net_idx + 1;
 
                     % Display Performance For Autoencoder i
-                    PXX         = predict(autoenc, XX);
-                    mse_err_tr  = mse(XX - PXX);
-                    r_tr        = regression(XX, PXX, 'one'); 
+                    XX_tr       = XX(:, self.tr_indices);
+                    PXX_tr      = predict(autoenc, XX_tr);
+                    mse_err_tr  = mse(XX_tr  - PXX_tr);
+                    r_tr        = regression(XX_tr, PXX_tr, 'one'); 
                     PXX_te      = predict(autoenc, XX_te);
                     mse_err_te  = mse(XX_te - PXX_te);
                     r_te        = regression(XX_te, PXX_te, 'one');
@@ -704,18 +705,19 @@ classdef (Abstract) DAERegModel < handle
                     tr_stats{net_idx} = tr_stat;
                     net_idx = net_idx + 1;
 
-                    % Display Performance For Autoencoder i  
-                    PXX         = predict(autoenc, XX);
-                    mse_err_tr  = mse(XXT - PXX);
-                    r_tr        = regression(XXT, PXX, 'one'); 
-                    PXX_te      = predict(autoenc, XX_te);
-                    mse_err_te  = mse(XXT_te - PXX_te);
-                    r_te        = regression(XXT_te, PXX_te, 'one');	
-                    e_te        = gsubtract(XXT_te, PXX_te);
-                    PXX_val     = predict(autoenc, XX_val);
-                    mse_err_val = mse(XXT_val - PXX_val);
-                    r_val       = regression(XXT_val, PXX_val, 'one');
-                    e_val       = gsubtract(XXT_val, PXX_val);
+                    % Display Performance For Autoencoder i
+                    XXT_tr      = XXT(:, self.tr_indices);
+                    PXXT_tr     = predict(autoenc, XX(:, self.tr_indices));
+                    mse_err_tr  = mse(XXT_tr - PXXT_tr);
+                    r_tr        = regression(XXT_tr, PXXT_tr, 'one'); 
+                    PXXT_te     = predict(autoenc, XX_te);
+                    mse_err_te  = mse(XXT_te - PXXT_te);
+                    r_te        = regression(XXT_te, PXXT_te, 'one');	
+                    e_te        = gsubtract(XXT_te, PXXT_te);
+                    PXXT_val    = predict(autoenc, XX_val);
+                    mse_err_val = mse(XXT_val - PXXT_val);
+                    r_val       = regression(XXT_val, PXXT_val, 'one');
+                    e_val       = gsubtract(XXT_val, PXXT_val);
 
                     disp(['NT' num2str(i) '_ERR: Tr:' num2str(mse_err_tr) ' R:' num2str(r_tr) ...
                             ' Te:' num2str(mse_err_te) ' R:' num2str(r_te) ' S:(m:' num2str(mean(e_te(:))) ', d:' num2str(std(e_te(:))) ')'...
@@ -802,7 +804,7 @@ classdef (Abstract) DAERegModel < handle
                     % deepnet.layerWeights{1}.learnFcn = 'learngdm';  
 
                     % Create a fitnet
-                    deepnet = fitnet(nncfg.dnn.arch, nncfg.trainFcn);
+                    deepnet = fitnet(nncfg.dnn.arch, nncfg.trainFcn);                    
                     deepnet.inputs{1}.processFcns = {};
                     deepnet.outputs{end}.processFcns = {};
 
@@ -814,7 +816,6 @@ classdef (Abstract) DAERegModel < handle
                             deepnet.layers{i}.transferFcn = nncfg.transferFcn;
                         end
                     end
-
 
                     for i=1:numel(deepnet.layers)
                         if (isfield(nncfg, 'act_fns'))
@@ -942,32 +943,67 @@ classdef (Abstract) DAERegModel < handle
             %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
             % Test the Network
             %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-            % Training dataset visualization
-            PYY = deepnet_ft(XX);
-            e = gsubtract(YY,PYY);
-            tr_db_perf = perform(deepnet_ft, YY, PYY);           
-
-            % Testing dataset visualization
+            %
+            % Without fine-tuning but after stacking
+            %
+            
+            % Training/Testing/Validation dataset visualization
+            XX_tr       = self.nndbs{self.in_idx}.features(:, self.tr_indices);
+            YY_tr       = self.nndbs{self.out_idx}.features(:, self.tr_indices);
             XX_te       = self.nndbs{self.in_idx}.features(:, self.te_indices);
             YY_te       = self.nndbs{self.out_idx}.features(:, self.te_indices);
             XX_val      = self.nndbs{self.in_idx}.features(:, self.val_indices);
             YY_val      = self.nndbs{self.out_idx}.features(:, self.val_indices);
-            PYY_te      = deepnet_ft(XX_te);
-            PYY_val     = deepnet_ft(XX_val);
-            test_db_perf = perform(deepnet_ft, YY_te, PYY_te);
-            val_db_perf = perform(deepnet_ft, YY_val, PYY_val);            
+            PYY_tr      = deepnet(XX_tr);
+            PYY_te      = deepnet(XX_te);
+            PYY_val     = deepnet(XX_val);
+            tr_db_perf  = perform(deepnet, YY_tr, PYY_tr);
+            te_db_perf  = perform(deepnet, YY_te, PYY_te);
+            val_db_perf = perform(deepnet, YY_val, PYY_val);
+            e_tr        = gsubtract(YY_tr, PYY_tr);
             e_te        = gsubtract(YY_te, PYY_te);
             e_val       = gsubtract(YY_val, PYY_val);
             
-            r_tr  = regression(YY, PYY, 'one');
+            r_tr  = regression(YY_tr, PYY_tr, 'one');
             r_te  = regression(YY_te, PYY_te, 'one');
             r_val = regression(YY_val, PYY_val, 'one');
-            
+                
             % Display performance
             disp(['DNN_ERR: Tr:' num2str(tr_db_perf) ' R:' num2str(r_tr) ...
-                ' Te_EX:' num2str(test_db_perf) ' R:' num2str(r_te) ' S:(m:' num2str(mean(e_te(:))) ', d:' num2str(std(e_te(:))) ')' ...
-                ' Val:' num2str(val_db_perf) ' R:' num2str(r_val) ' S:(m:' num2str(mean(e_val(:))) ', d:' num2str(std(e_val(:))) ')'...
-                ' Time:' num2str(total_time/1000)]);
+                ' Te:' num2str(te_db_perf) ' R:' num2str(r_te) ' S:(m:' num2str(mean(e_te(:))) ', d:' num2str(std(e_te(:))) ')' ...
+                ' Val:' num2str(val_db_perf) ' R:' num2str(r_val) ' S:(m:' num2str(mean(e_val(:))) ', d:' num2str(std(e_val(:))) ')']);
+            
+            if (self.fine_tune)
+                %
+                % With fine-tuning
+                %    
+
+                % Testing dataset visualization
+                XX_tr       = self.nndbs{self.in_idx}.features(:, self.tr_indices);
+                YY_tr       = self.nndbs{self.out_idx}.features(:, self.tr_indices);
+                XX_te       = self.nndbs{self.in_idx}.features(:, self.te_indices);
+                YY_te       = self.nndbs{self.out_idx}.features(:, self.te_indices);
+                XX_val      = self.nndbs{self.in_idx}.features(:, self.val_indices);
+                YY_val      = self.nndbs{self.out_idx}.features(:, self.val_indices);
+                PYY_tr      = deepnet_ft(XX_tr);
+                PYY_te      = deepnet_ft(XX_te);
+                PYY_val     = deepnet_ft(XX_val);
+                tr_db_perf  = perform(deepnet_ft, YY_tr, PYY_tr);
+                te_db_perf  = perform(deepnet_ft, YY_te, PYY_te);
+                val_db_perf = perform(deepnet_ft, YY_val, PYY_val);
+                e_tr        = gsubtract(YY_tr, PYY_tr);
+                e_te        = gsubtract(YY_te, PYY_te);
+                e_val       = gsubtract(YY_val, PYY_val);
+
+                r_tr  = regression(YY_tr, PYY_tr, 'one');
+                r_te  = regression(YY_te, PYY_te, 'one');
+                r_val = regression(YY_val, PYY_val, 'one');
+                
+                disp(['DNN_ERR: Tr:' num2str(tr_db_perf) ' R:' num2str(r_tr) ...
+                    ' Te:' num2str(te_db_perf) ' R:' num2str(r_te) ' S:(m:' num2str(mean(e_te(:))) ', d:' num2str(std(e_te(:))) ')' ...
+                    ' Val:' num2str(val_db_perf) ' R:' num2str(r_val) ' S:(m:' num2str(mean(e_val(:))) ', d:' num2str(std(e_val(:))) ')'...
+                    ' Time:' num2str(total_time/1000)]);            
+            end
             
             if (~self.split_val_data)
                 XX = self.nndbs{self.in_idx}.features;
@@ -975,7 +1011,7 @@ classdef (Abstract) DAERegModel < handle
             end
             
             % Callback
-            self.on_train_end_(pp_infos, nncfg, pretr_nets, deepnet, deepnet_ft, tr_stats, XX, YY, PYY, XX_te, YY_te, PYY_te);
+            self.on_train_end_(pp_infos, nncfg, pretr_nets, deepnet, deepnet_ft, tr_stats, XX, YY, XX_te, YY_te);
         end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -986,7 +1022,7 @@ classdef (Abstract) DAERegModel < handle
         % Protected: Callbacks       
        	%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         on_train_start_(self, pp_infos);        
-        on_train_end_(self, pp_infos, nncfg, pretr_nets, deepnet, deepnet_ft, tr_stats, XX, YY, PYY, XX_te, YY_te, PYY_te);
+        on_train_end_(self, pp_infos, nncfg, pretr_nets, deepnet, deepnet_ft, tr_stats, XX, YY, XX_te, YY_te);
         XX = on_dr_end_(self, pretr_nets, XX);
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     end

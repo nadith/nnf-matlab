@@ -9,11 +9,11 @@ classdef AECfg
         cost_fn;        
         
         % msesparse cost function params        
-        sparsity;   % SparsityProportion
+        sparsity;   % SparsityProportion       
         sparse_reg; % SparsityRegularization
         l2_wd;      % L2WeightRegularization
         
-        % mse, msesparse cost function params
+        % mse cost function params
         reg_ratio;  % 'regularization' can be set to any value between 0 and 1.
                     % The greater the regularization value, the more squared weights and biases 
                     % are included in the performance calculation relative to errors. The 
@@ -47,10 +47,10 @@ classdef AECfg
             self.enc_fn = 'satlin';
             self.dec_fn = 'purelin';
             self.cost_fn = 'msesparse';
-            self.sparsity = 0.01;
-            self.sparse_reg = 1;
-            self.l2_wd = 0.001;
-            self.reg_ratio = 0;
+            self.sparsity = 0; %0.01;
+            self.sparse_reg = 0; %1;
+            self.l2_wd = 0; %0.001;
+            self.reg_ratio = 0; %0;
             self.inPreProcess = cell(0, 0);
             self.outPreProcess = cell(0, 0);
             self.encoderInitFcn = 'initwb';
