@@ -25,6 +25,7 @@ sel.class_range           = [1:100];
 [nndb_tr, ~, nndb_te, ~, ~, ~, ~] = DbSlice.slice(nndb, sel); 
 nndb_tr.show(10, 8)
 figure, nndb_te.show(10, 4)
+figure, nndb_tr.show_ws(10, 8) % with whitespaces
 % help DbSlice.examples % For extensive help on Db slicing
             
 %% PCA_L2

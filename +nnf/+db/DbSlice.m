@@ -100,11 +100,11 @@ classdef DbSlice
                 unq_n_per_cls = unique(nndb.n_per_class);
                 
                 if (isscalar(unq_n_per_cls))
-                    sel.tr_col_indices = np.arange(unique(nndb.n_per_class))
+                    sel.tr_col_indices = np.arange(unique(nndb.n_per_class));
                 else
                     error(['Selection is not provided.'
                             ' tr_col_indices = nndb.n_per_class'
-                            ' must be same for all classes'])
+                            ' must be same for all classes']);
                 end
             end           
             

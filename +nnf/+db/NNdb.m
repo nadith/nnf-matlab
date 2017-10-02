@@ -71,6 +71,7 @@ classdef NNdb < handle
             import nnf.db.Format; 
                         
             % Set defaults for arguments
+            if (nargin < 2), db = []; end
             if (nargin < 3), n_per_class = []; end
             if (nargin < 4), build_cls_lbl = false; end
             if (nargin < 5), cls_lbl = []; end
@@ -431,6 +432,71 @@ classdef NNdb < handle
             import nnf.db.NNdb;
             
             new_nndb = NNdb(name, self.db, self.n_per_class, self.build_cls_lbl, self.cls_lbl, self.format);
+        end
+        
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        function show_ws(self, cls_n, n_per_class, scale, offset, ws) 
+            % SHOW: Visualizes the db in a image grid with whitespacing.
+            %
+            % Parameters
+            % ----------
+            % cls_n : int, optional
+            %     No. of classes.
+            % 
+            % n_per_class : int, optional
+            %     Images per class.
+            % 
+            % scale : int, optional
+            %     Scaling factor. (Default value = [])
+            % 
+            % offset : int, optional
+            %     Image index offset to the dataset. (Default value = 1)
+            %
+            % ws : struct, optional
+            %     whitespace between images in the grid.
+            %
+            %     Whitespace Structure (with defaults)
+            %     -----------------------------------
+            %     ws.height = 5;                    % whitespace in height, y direction (0 = no whitespace)  
+            %     ws.width  = 5;                    % whitespace in width, x direction (0 = no whitespace)  
+            %     ws.color  = 0 or 255 or [R G B];  % (255 = white)
+            %
+            %
+            % Examples
+            % --------
+            % Show first 5 subjects with 8 images per subject. (offset = 1)
+            % .Show(5, 8)
+            %
+            % Show next 5 subjects with 8 images per subject, starting at (5*8 + 1)th image.
+            % .Show(5, 8, [], 5*8 + 1)
+            %
+            
+            % Imports
+            import nnf.utl.immap;
+            
+            if (nargin >= 6)
+                immap(self.db_matlab, cls_n, n_per_class, scale, offset);
+                    
+            else
+                if (nargin < 6), ws = struct; end
+                if (~isfield(ws, 'height')); ws.height = 5; end
+                if (~isfield(ws, 'width')); ws.width = 5; end
+                if (~isfield(ws, 'color')) 
+                    if (self.ch > 1); ws.color = [255 0 0]; else; ws.color = 255; end
+                end
+                
+                if (nargin >= 5)
+                    immap(self.db_matlab, cls_n, n_per_class, scale, offset, ws);
+                elseif (nargin >= 4)
+                    immap(self.db_matlab, cls_n, n_per_class, scale, 1, ws);
+                elseif (nargin >= 3)
+                    immap(self.db_matlab, cls_n, n_per_class, [], 1, ws);
+                elseif (nargin >= 2)
+                    immap(self.db_matlab, cls_n, 1, [], 1, ws);
+                elseif (nargin >= 1)
+                    immap(self.db_matlab, 1, 1, [], 1, ws);
+                end
+            end
         end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

@@ -1,4 +1,4 @@
-function [image_map] = immap( X, rows, cols, scale, offset )
+function [image_map] = immap( X, rows, cols, scale, offset, ws )
     %SHOW_IMAGE_MAP visualizes image data tensor in a grid.
     %
     % Parameters
@@ -20,6 +20,15 @@ function [image_map] = immap( X, rows, cols, scale, offset )
     % offset : int, optional
     %     Offset to the first image (Default value = 1, start from 1).
     % 
+    % ws : struct, optional
+    %     whitespace between images in the grid.
+    %
+    %     Whitespace Structure (with defaults)
+    %     -----------------------------------
+    %     ws.height = 0;                    % whitespace in height, y direction (0 = no whitespace)  
+    %     ws.width  = 0;                    % whitespace in width, x direction (0 = no whitespace)  
+    %     ws.color  = 0 or 255 or [R G B];  % (0 = black)
+    %
     % 
     % Returns
     % -------
@@ -49,7 +58,10 @@ function [image_map] = immap( X, rows, cols, scale, offset )
     % Set defaults for arguments
     if (nargin < 4), scale = []; end
     if (nargin < 5), offset = 1; end
-    
+    if (nargin < 6), ws = struct; end
+    if (~isfield(ws, 'height')); ws.height = 0; end
+    if (~isfield(ws, 'width')); ws.width = 0; end
+        
     % If `X` is a database with many images: 4D tensor in the format `H x W x CH x N`
     if (numel(size(X)) > 3) 
         [h, w, ch, n] = size(X);
@@ -57,6 +69,9 @@ function [image_map] = immap( X, rows, cols, scale, offset )
     else % X: `H x W x CH`: In matlab last singular dimension is ignored by default.
         [h, w, ch] = size(X);
         n = 1;        
+    end    
+    if (~isfield(ws, 'color')) 
+        if (ch > 1); ws.color = [0 0 0]; else; ws.color = 0; end
     end
     
     % Requested image count
@@ -93,17 +108,34 @@ function [image_map] = immap( X, rows, cols, scale, offset )
     end
     
     % Building the grid
-    [dim_y, dim_x, ~, ~] = size(newX);
-    image_map = uint8(zeros(dim_y * rows, dim_x * cols, ch));
-
+    [dim_y, dim_x, ~, ~] = size(newX);    
+        
+    % Whitespace information for building the grid
+    ws_color = ws.color;
+    
+     % For RGB color build a color matrix (3D)
+    if (~isscalar(ws.color))       
+        ws_color = [];
+        ws_color(:, :, 1) = ws.color(1);
+        ws_color(:, :, 2) = ws.color(2);
+        ws_color(:, :, 3) = ws.color(3);
+    end
+            
+    GRID_H = (dim_y + ws.height) * rows - ws.height;
+    GRID_W = (dim_x + ws.width) * cols - ws.width;
+    image_map = uint8(ones(GRID_H, GRID_W, ch) .* ws_color);
+       
     % Fill the grid
     for i = 1:rows
         for j = 1:cols
             im_index = (i-1) * cols + j;
             if (im_index > im_count); break; end;
-            image_map((i-1)*dim_y + 1:(i)*dim_y, (j-1)*dim_x + 1:(j)*dim_x, :) = newX(:, :, :, im_index);
+            
+            y_block = (i-1)*(dim_y + ws.height) + 1:(i-1)*(dim_y + ws.height) + dim_y;
+            x_block = (j-1)*(dim_x + ws.width) + 1:(j-1)*(dim_x + ws.width) + dim_x;
+            image_map(y_block, x_block, :) = newX(:, :, :, im_index);
         end        
-        if (im_index > im_count); break; end;
+        if (im_index > im_count); break; end
     end
         
     % Visualizing the grid
