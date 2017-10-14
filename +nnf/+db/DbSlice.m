@@ -8,6 +8,7 @@ classdef DbSlice
     % sel.tr_noise_rate         = [];   % Noise rate or Noise types for `tr_col_indices`
     % sel.tr_occlusion_rate     = [];   % Occlusion rate for `tr_col_indices`
     % sel.tr_occlusion_type     = [];   % ('t':top, 'b':bottom, 'l':left, 'r':right) for `tr_col_indices`
+    % sel.tr_occlusion_offset   = [];   % Occlusion start offset from top/bottom/left/right corner depending on `tr_occlusion_type`
     % sel.tr_out_col_indices    = [];   % Training target column indices
     % sel.val_col_indices       = [];   % Validation column indices
     % sel.val_out_col_indices   = [];   % Validation target column indices
@@ -275,6 +276,7 @@ classdef DbSlice
                             % Check whether col_idx is a occlusion required index 
                             occl_rate = [];
                             occl_type = [];
+                            occl_offset = [];
                             if (~isempty(sel.tr_occlusion_rate) && ...
                                     (tci_offsets(dsi) <= numel(sel.tr_occlusion_rate)) && ...
                                     (0 ~= sel.tr_occlusion_rate(tci_offsets(dsi))))
@@ -283,10 +285,14 @@ classdef DbSlice
                                 if (~isempty(sel.tr_occlusion_type))
                                     occl_type = sel.tr_occlusion_type(tci_offsets(dsi));
                                 end
+                                
+                                if (~isempty(sel.tr_occlusion_offset))
+                                    occl_offset = sel.tr_occlusion_offset(tci_offsets(dsi));
+                                end
                             end
                             
                             DbSlice.build_nndb_tr_(nndbs, pi, is_new_class, pimg, ...
-                                                          noise_rate, occl_rate, occl_type);                            
+                                                          noise_rate, occl_rate, occl_type, occl_offset);                            
 
                         % Build Training Target DB
                         elseif (edataset == Dataset.TR_OUT)
@@ -556,6 +562,22 @@ classdef DbSlice
             sel.class_range = [1:10];
             [nndb_tr, ~, ~, ~, ~, ~, ~] = DbSlice.slice(nndb, sel);
             
+            
+            % 
+            % Select 1st 2nd 4th images of each identity for training + 
+            %               add occlusions in the middle (horizontal/vertical).
+            %               default occlusion type: 'b'.
+            nndb = NNdb('original', imdb_8, 8, true);
+            sel = Selection();
+            sel.tr_col_indices = [1:2 4];
+            sel.tr_occlusion_rate = [0 0.5 0.2];        % percentage of occlusion
+            sel.tr_occlusion_type = 'ttt';              % occlusion type: 't' for selected tr. indices [1, 2, 4]
+            sel.tr_occlusion_offset = [0 0.25 0.4];     % Offset from top since 'tr_occlusion_type = t'            
+            % sel.tr_occlusion_type = 'rrr';            % occlusion type: 'r' for selected tr. indices [1, 2, 4]
+            % sel.tr_occlusion_offset = [0 0.25 0.4];   % Offset from right since 'tr_occlusion_type = r'
+            sel.class_range = [1:10];
+            [nndb_tr, ~, ~, ~, ~, ~, ~] = DbSlice.slice(nndb, sel);
+            
 
            	% 
             % To prepare regression datasets, training dataset and training target dataset
@@ -622,25 +644,37 @@ classdef DbSlice
     
     methods (Access = public, Static) % ?nnf.alg.PCA
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        function [filter] = get_occlusion_patch(h, w, dtype, occlusion_type, occlusion_rate)
+        function [filter] = get_occlusion_patch(h, w, dtype, occl_type, occl_rate, occl_offset)
+            
+            % Set defaults for arguments
+            if (nargin < 6); occl_offset = 0; end
+            
             filter = ones(h, w);
             filter = cast(filter, dtype);
             
-            if (isempty(occlusion_type) || occlusion_type == 'b')
-                sh = floor((1-occlusion_rate) * h);
-                filter(sh+1:h, 1:w) = 0;
+            if (isempty(occl_type) || occl_type == 'b')
+                sh = ceil(occl_rate * h);
+                en = floor((1-occl_offset) * h); 
+                st = en - sh + 1; if (st < 0); st = 1; end
+                filter(st:en, 1:w) = 0;
 
-            elseif (occlusion_type == 'r')
-                sh = floor((1-occlusion_rate) * w);
-                filter(1:h, sh+1:w) = 0;
-                
-            elseif (occlusion_type == 't')
-                sh = floor((occlusion_rate) * h);
-                filter(1:sh, 1:w) = 0;
-                
-            elseif (occlusion_type == 'l')
-                sh = floor((occlusion_rate) * w);
-                filter(1:h, 1:sh) = 0;
+            elseif ((occl_type == 'r'))
+                sh = ceil(occl_rate * w);
+                en = floor((1-occl_offset) * w); 
+                st = en - sh + 1; if (st < 0); st = 1; end
+                filter(1:h, st:en) = 0;
+
+            elseif (occl_type == 't')
+                sh = floor(occl_rate * h);
+                st = floor(occl_offset * h) + 1; 
+                en = st + sh - 1; if (en > h); en = h; end
+                filter(st:en, 1:w) = 0;
+
+            elseif (occl_type == 'l')
+                sh = floor(occl_rate * w);
+                st = floor(occl_offset * w) + 1; 
+                en = st + sh - 1; if (en > w); en = w; end
+                filter(1:h, st:en) = 0;              
             end
         end
         
@@ -697,7 +731,7 @@ classdef DbSlice
             remove(dict_nndbs, uint32(Dataset.TR));
 
             % Iterate through ranges
-            for ri=1:numel(col_ranges)                
+            for ri=1:numel(col_ranges)
                 dict_nndbs(ri) = NNdb.empty;
             end
         end
@@ -737,7 +771,7 @@ classdef DbSlice
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         function nndbs = build_nndb_tr_(nndbs, pi, is_new_class, img, ...
-                                                        noise_rate, occlusion_rate, occlusion_type) 
+                                                        noise_rate, occl_rate, occl_type, occl_offset) 
             % BUILD_NNDB_TR: builds the nndb training database.
             %          
             % Returns
@@ -754,13 +788,13 @@ classdef DbSlice
             if (isempty(nndbs)); return; end
             nndb = nndbs(pi);
             
-            if (~isempty(occlusion_rate) || ~isempty(noise_rate))
+            if (~isempty(occl_rate) || ~isempty(noise_rate))
                 
                 [h, w, ch] = size(img);
                 
                 % Adding different occlusions depending on the precentage
-                if (~isempty(occlusion_rate))
-                    filter = DbSlice.get_occlusion_patch(h, w, class(img), occlusion_type, occlusion_rate);                    
+                if (~isempty(occl_rate))
+                    filter = DbSlice.get_occlusion_patch(h, w, class(img), occl_type, occl_rate, occl_offset);                    
                     
                     % For grey scale
                     if (ch == 1)
@@ -851,7 +885,7 @@ classdef DbSlice
             % Imports 
             import nnf.db.DbSlice;
 
-            if (isempty(nndbs)); return; end;
+            if (isempty(nndbs)); return; end
             nndb = nndbs(pi);
             nndb.add_data(img);
             
@@ -872,7 +906,7 @@ classdef DbSlice
             % Imports 
             import nnf.db.DbSlice;
 
-            if (isempty(nndbs)); return; end;
+            if (isempty(nndbs)); return; end
             nndb = nndbs(pi);
             nndb.add_data(img);
             
@@ -893,7 +927,7 @@ classdef DbSlice
             % Imports 
             import nnf.db.DbSlice;
 
-            if (isempty(nndbs)); return; end;
+            if (isempty(nndbs)); return; end
             nndb = nndbs(pi);
             nndb.add_data(img);
             
@@ -914,7 +948,7 @@ classdef DbSlice
             % Imports 
             import nnf.db.DbSlice;
 
-            if (isempty(nndbs)); return; end;
+            if (isempty(nndbs)); return; end
             nndb = nndbs(pi);
             nndb.add_data(img);
             
@@ -935,7 +969,7 @@ classdef DbSlice
             % Imports 
             import nnf.db.DbSlice;
 
-            if (isempty(nndbs)); return; end;
+            if (isempty(nndbs)); return; end
             nndb = nndbs(pi);
             nndb.add_data(img);
             

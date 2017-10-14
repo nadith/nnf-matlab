@@ -7,6 +7,7 @@ classdef Selection < handle
         tr_noise_rate       % Noise rate or Noise types for `tr_col_indices`
         tr_occlusion_rate   % Occlusion rate for `tr_col_indices`
         tr_occlusion_type   % Occlusion type ('t':top, 'b':bottom, 'l':left, 'r':right)
+        tr_occlusion_offset % Occlusion start offset from top/bottom/left/right corner depending on 'tr_occlusion_type'
         tr_out_col_indices  % Training target column indices
         val_col_indices     % Validation column indices
         val_out_col_indices % Validation target column indices
@@ -37,6 +38,7 @@ classdef Selection < handle
         self.tr_noise_rate       = [];      % Rate or noise types for column index
         self.tr_occlusion_rate   = [];      % Occlusion rate for column index
         self.tr_occlusion_type   = [];      % Occlusion type ('t':top, 'b':bottom, 'l':left, 'r':right)
+        self.tr_occlusion_offset = [];      % Occlusion start offset from top or left corner depending on 'tr_occlusion_type'
         self.tr_out_col_indices  = [];      % Training target column indices
         self.val_col_indices     = [];      % Validation column indices
         self.val_out_col_indices = [];      % Validation target column indices
@@ -66,6 +68,7 @@ classdef Selection < handle
         sel.tr_noise_rate       = self.tr_noise_rate;
         sel.tr_occlusion_rate   = self.tr_occlusion_rate;
         sel.tr_occlusion_type   = self.tr_occlusion_type;
+        sel.tr_occlusion_offset = self.tr_occlusion_offset;       
         sel.tr_out_col_indices  = self.tr_out_col_indices;
         sel.val_col_indices     = self.val_col_indices;
         sel.val_out_col_indices = self.val_out_col_indices;
@@ -107,6 +110,7 @@ classdef Selection < handle
             isequal(self.tr_noise_rate, sel.tr_noise_rate) && ...
             isequal(self.tr_occlusion_rate, sel.tr_occlusion_rate) && ...
             isequal(self.tr_occlusion_type, sel.tr_occlusion_type) && ...
+            isequal(self.tr_occlusion_offset, sel.tr_occlusion_offset) && ...
             isequal(self.tr_out_col_indices, sel.tr_out_col_indices) && ...
             isequal(self.val_col_indices, sel.val_col_indices) && ...
             isequal(self.val_out_col_indices, sel.val_out_col_indices) && ...
