@@ -1,4 +1,4 @@
-function [image_map] = immap( X, rows, cols, scale, offset, ws )
+function [image_map] = immap( X, varargin )
     %SHOW_IMAGE_MAP visualizes image data tensor in a grid.
     %
     % Parameters
@@ -29,7 +29,10 @@ function [image_map] = immap( X, rows, cols, scale, offset, ws )
     %     ws.width  = 0;                    % whitespace in width, x direction (0 = no whitespace)  
     %     ws.color  = 0 or 255 or [R G B];  % (0 = black)
     %
-    % 
+    % title : string, optional 
+    %     figure title, (Default value = [])
+    %
+    %
     % Returns
     % -------
     % none : void
@@ -39,26 +42,60 @@ function [image_map] = immap( X, rows, cols, scale, offset, ws )
     % --------
     % Show an image grid of 5 rows and 8 cols (5x8 cells).
     % show_image_map(db, 5, 8)
+    % show_image_map(db, 5, 'Cols', 8)
+    % show_image_map(db, 'Rows', 5, 'Cols', 8)
     %
     % Show an image grid of 5 rows and 8 cols (5x8 cells). half resolution.
-    % show_image_map(db, 5, 8, 0.5)
+    % show_image_map(db, 5, 8, 0.5)    
     %
     % Show an image grid of 5 rows and 8 cols (5x8 cells). start from 10th image.
     % show_image_map(db, 5, 8, [], 10)
 
     % Copyright 2015-2016 Nadith Pathirage, Curtin University.
     
-    if (nargin < 2)
-        error('ARG_ERR: rows, cols: undefined');
+    % Set defaults
+    rows = 1;
+    cols = 1;
+    scale = [];
+    offset = 1;
+    ws = struct;
+    ftitle = [];
+
+    % Handling varargs
+    for i=1:numel(varargin)
+        arg = varargin{i};
+        if (isa('char', class(arg)))
+            p = inputParser;
+            addOptional(p, 'Rows', rows);
+            addOptional(p, 'Cols', cols);
+            addOptional(p, 'Scale', scale);
+            addOptional(p, 'Offset', offset);
+            addOptional(p, 'WS', ws);
+            addOptional(p, 'Title', ftitle);
+            parse(p, varargin{i:end});            
+            rows = p.Results.Rows;
+            cols = p.Results.Cols;
+            scale = p.Results.Scale;
+            offset = p.Results.Offset;
+            ws = p.Results.WS;
+            ftitle = p.Results.Title;
+            break;            
+        else
+            % Read the params in order
+            switch (i)
+                case 1; rows = arg;
+                case 2; cols = arg;
+                case 3; scale = arg;
+                case 4; offset = arg;
+                case 5; ws = arg;
+                case 6; ftitle = arg;
+                otherwise
+                    error('Suppplied parameters exceed maximum number of parameters allowed.')
+            end
+        end
     end
-    if (nargin < 3)
-        error('ARG_ERR: cols: undefined');
-    end
-    
+
     % Set defaults for arguments
-    if (nargin < 4), scale = []; end
-    if (nargin < 5), offset = 1; end
-    if (nargin < 6), ws = struct; end
     if (~isfield(ws, 'height')); ws.height = 0; end
     if (~isfield(ws, 'width')); ws.width = 0; end
         
@@ -78,9 +115,15 @@ function [image_map] = immap( X, rows, cols, scale, offset, ws )
     im_count = rows * cols;
 
     % Choose images with offset
-    if (~isempty(scale) && scale ~= 1)        
-        % Scale Operation        
-        newX = uint8(zeros(h*scale, w*scale, ch, im_count));  
+    if (~isempty(scale) && ...
+            ((isscalar(scale) && scale ~= 1) || (~isscalar(scale) && ~isequal(scale, [1 1]))))
+        
+        % Scale Operation, if scale is a scalar/vector
+        if (isscalar(scale))
+            newX = uint8(zeros(int32(h*scale), int32(w*scale), ch, im_count));
+        else
+            newX = uint8(zeros(int32(scale(1)), int32(scale(2)), ch, im_count));
+        end
         
         % Set the end
         en = offset + im_count-1;
@@ -141,7 +184,10 @@ function [image_map] = immap( X, rows, cols, scale, offset, ws )
     % Visualizing the grid
     imshow(image_map);
     
-    % Figure Title
-    title([int2str(dim_y) 'x' int2str(dim_x)]);
-    
+    % Figure title
+    if (isempty(ftitle))
+        title([int2str(dim_y) 'x' int2str(dim_x)]);
+    else
+        title(ftitle);
+    end    
 end

@@ -14,7 +14,8 @@ classdef NNdb < handle
     
     % Copyright 2015-2016 Nadith Pathirage, Curtin University (chathurdara@gmail.com).
     
-	properties (SetAccess = public) 
+	properties (SetAccess = public)
+        name;           % (s) Name of nndb object
         db;             % (M) Actual Database   
         format;         % (s) Current Format of The Database
         
@@ -37,6 +38,7 @@ classdef NNdb < handle
         features_scipy; % 2D feature matrix (double) compatible for scipy library.
         db_matlab;      % db compatible for matlab.
         features;       % 2D feature matrix (double) compatible for matlab.
+        zero_to_one;    % nndb converted to 0-1 range.
         im_ch_axis;     % Image channel index for an image.
     end
 
@@ -62,7 +64,7 @@ classdef NNdb < handle
             %     Class index array. (Default value = []).
             % 
             % format : nnf.db.Format, optinal
-            %     Format of the database. (Default value = 1, start from 1).
+            %     Format of the database. (Default value = Format.H_W_CH_N, refer `nnf.db.Format`).
             %             
 
             disp(['Costructor::NNdb ' name]);
@@ -100,13 +102,20 @@ classdef NNdb < handle
       
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%                
         function nndb = merge(self, nndb)
+            % MERGE: `nndb` instance with `self` instance.
+            % 
+            % Parameters
+            % ----------
+            % nndb : :obj:`NNdb`
+            %     NNdb object that represents the dataset.
+            %
+        
             % Imports
             import nnf.db.NNdb;
             import nnf.db.Format;
             
             assert(self.h == nndb.h && self.w == nndb.w && self.ch == nndb.ch);
             assert(self.cls_n == nndb.cls_n);
-            assert(self.cls_n == nndb.cls_n)
             assert(strcmp(class(self.db), class(nndb.db)))
             assert(self.format == nndb.format)
         
@@ -165,16 +174,39 @@ classdef NNdb < handle
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         function update_attr(self, is_new_class, sample_n)
-            % UPDATE_NNDB_ATTR: update nndb attributes. Used when building the nndb dynamically.
+            % UPDATE_NNDB_ATTR: update self attributes. Used when building the nndb dynamically.
+            % 
+            % Can invoke this method for every item added (default sample_n=1) or 
+            % batch of items added for a given class (sample_n > 1).
+            % 
+            % Parameters
+            % ----------
+            % is_new_class : bool
+            %     Recently added data item/batch belongs to a new class.
+            % 
+            % sample_n : int
+            %     Recently added data batch size. (Default value = 1).
+            % 
+            % Examples
+            % --------
+            % Using this method to update the attibutes of nndb dynamically.
             %
+            % >> nndb = NNdb("EMPTY_NNDB", [], [], false, [], format=Format.H_W_CH_N)
+            % >> data = rand(30, 30, 1, 100)   # data tensor for each class
+            % >> nndb.add_data(data)
+            % >> nndb.update_attr(true, 100)
+            %
+                
+            % Set defaults
+            if (nargin < 3); sample_n = 1; end
             
             % Initialize db related fields
             self.init_db_fields__();
                 
             % Set class start, and class counts of nndb
-            if (is_new_class) 
+            if (is_new_class)                
                 % Set class start(s) of nndb, dynamic expansion
-                cls_st = self.n; % current sample count
+                cls_st = self.n - sample_n + 1; % start of the most recent item addition
                 if (isempty(self.cls_st)); self.cls_st = uint32([]); end
                 self.cls_st = cat(2, self.cls_st, uint32([cls_st]));
 
@@ -188,7 +220,7 @@ classdef NNdb < handle
             end    
 
             % Increment the n_per_class current class
-            self.n_per_class(end) = self.n_per_class(end) + 1;
+            self.n_per_class(end) = self.n_per_class(end) + sample_n;
 
             % Set class label of nndb, dynamic expansion
             cls_lbl = self.cls_n;
@@ -203,14 +235,14 @@ classdef NNdb < handle
             % Parameters
             % ----------
             % si : int
-            %     Sample index.
+            %     Sample index or range.
             %             
             
             % Imports
             import nnf.db.Format;
             
             % Error handling for arguments
-            assert(si <= self.n);            
+            assert(isempty(find(si > self.n)));
                         
             % Get data according to the format
             if (self.format == Format.H_W_CH_N)
@@ -242,7 +274,7 @@ classdef NNdb < handle
             import nnf.db.Format;
 
             % Add data according to the format (dynamic allocation)
-            if (self.format == Format.H_W_CH_N)                
+            if (self.format == Format.H_W_CH_N)
                 if (isempty(self.db))
                     self.db = data;
                 else
@@ -273,21 +305,125 @@ classdef NNdb < handle
         end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        function features = get_features(self, cls_lbl) 
-            % 2D Feature Matrix (double)
+        function data = features_to_data(self, features, h, w, ch, dtype) 
+            % FEATURES_TO_DATA: converts the feature matrix to `self` compatible data format and type.
+            %
+            % Parameters
+            % ----------
+            % features : `array_like`
+            %     2D feature matrix (double) compatible for matlab. (F_SIZE x SAMPLES)
+            % 
+            % h : int, optional under conditions
+            %     height to be used when self.db = [].  
+            % 
+            % w : int, optional under conditions
+            %     width to be used when self.db = [].   
+            % 
+            % ch : int, optional under conditions
+            %     no of channels to be used when self.db = [].   
+            % 
+            % dtype : int, optional under conditions
+            %     data type to be used when self.db = [].
+            %           
+                  
+            % Set default for arguments
+            if (nargin < 6); dtype = []; end
+            if (nargin < 5); ch = []; end
+            if (nargin < 4); w = []; end
+            if (nargin < 3); h = []; end
+            
+            assert((isempty(self.db) && ~(isempty(h) || isempty(w) || isempty(ch) || isempty(dtype))) ||...
+                (~isempty(self.db)));
+
+            if (~isempty(self.db))
+                h = self.h;
+                w = self.w;
+                ch = self.ch;
+                dtype = class(self.db);
+            end            
+            
+            % Imports
+            import nnf.db.Format;
+            
+            % Sample count
+            n = size(features, 2);
+
+            % Add data according to the format (dynamic allocation)
+            if (self.format == Format.H_W_CH_N)
+                data = reshape(features, h, w, ch, n);
+
+            % elseif (self.format == Format.H_N)
+            %     data = data;
+
+            elseif (self.format == Format.N_H_W_CH)
+                data = reshape(features, h, w, ch, n);
+                data = permute(data, [4 1 2 3]);
+
+            elseif (self.format == Format.N_H)
+                data = data';                
+            end
+            
+            data = cast(data, dtype);
+        end
+        
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        function features = get_features(self, cls_lbl, norm) 
+            % Get normalized 2D Feature matrix (double) for specified class labels.
             %
             % Parameters
             % ----------
             % cls_lbl : uint16, optional
             %     featres for class denoted by cls_lbl.
             %
+            % norm : string, optional
+            %     'l1', 'l2', 'max', normlization for each column. (Default value = []).
+            %
             
-            features = double(reshape(self.db, self.h * self.w * self.ch, self.n));
+            features = self.features;
+            
+            % Set default for arguments
+            if (nargin < 2); cls_lbl = []; end
+            if (nargin < 3); norm = []; end
             
             % Select class
-            if (nargin >= 2)
+            if (~isempty(cls_lbl))
                  features = features(:, self.cls_lbl == cls_lbl);
             end
+            
+            if (~isempty(norm))
+                assert(strcmp(norm, 'l2')); %TODO: implement for other norms
+                features = normc(features);
+            end
+        end
+        
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        function [features, m] = get_features_mean_diff(self, cls_lbl, m)
+            % Get the 2D feature mean difference matrix for specified class labels and mean.
+            % 
+            % Parameters
+            % ----------
+            % cls_lbl : scalar, optional
+            %       Class index array. (Default value = None).
+            % 
+            % m : `array_like`, optional
+            %       Mean vector to calculate feature mean difference. (Default value = None).
+            % 
+            % Returns
+            % -------
+            % features : `array_like` -double
+            %       2D feature difference matrix.
+            %
+            % m : `array_like` -double
+            %       Calculated mean.
+            %            
+            
+            if (nargin < 2); cls_lbl = []; end  
+            if (nargin < 3); m = []; end  
+            
+            features = self.get_features(cls_lbl)
+            if (isempty(m)); m = mean(features, 2); end
+           
+            features = (features - repmat(m, [1, self.n]));
         end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%      
@@ -435,7 +571,7 @@ classdef NNdb < handle
         end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        function show_ws(self, cls_n, n_per_class, scale, offset, ws) 
+        function show_ws(self, varargin) 
             % SHOW: Visualizes the db in a image grid with whitespacing.
             %
             % Parameters
@@ -461,46 +597,70 @@ classdef NNdb < handle
             %     ws.width  = 5;                    % whitespace in width, x direction (0 = no whitespace)  
             %     ws.color  = 0 or 255 or [R G B];  % (255 = white)
             %
+            % title : string, optional 
+            %     figure title, (Default value = [])
             %
             % Examples
             % --------
             % Show first 5 subjects with 8 images per subject. (offset = 1)
-            % .Show(5, 8)
+            % nndb.show_ws(5, 8)
             %
             % Show next 5 subjects with 8 images per subject, starting at (5*8 + 1)th image.
-            % .Show(5, 8, [], 5*8 + 1)
+            % nndb.show_ws(5, 8, 'Offset', 5*8 + 1)
             %
             
             % Imports
             import nnf.utl.immap;
             
-            if (nargin >= 6)
-                immap(self.db_matlab, cls_n, n_per_class, scale, offset);
-                    
-            else
-                if (nargin < 6), ws = struct; end
-                if (~isfield(ws, 'height')); ws.height = 5; end
-                if (~isfield(ws, 'width')); ws.width = 5; end
-                if (~isfield(ws, 'color')) 
-                    if (self.ch > 1); ws.color = [255 0 0]; else; ws.color = 255; end
-                end
-                
-                if (nargin >= 5)
-                    immap(self.db_matlab, cls_n, n_per_class, scale, offset, ws);
-                elseif (nargin >= 4)
-                    immap(self.db_matlab, cls_n, n_per_class, scale, 1, ws);
-                elseif (nargin >= 3)
-                    immap(self.db_matlab, cls_n, n_per_class, [], 1, ws);
-                elseif (nargin >= 2)
-                    immap(self.db_matlab, cls_n, 1, [], 1, ws);
-                elseif (nargin >= 1)
-                    immap(self.db_matlab, 1, 1, [], 1, ws);
+            ws = [];        
+            for i=1:numel(varargin)
+                arg = varargin{i};
+                if (isa('char', class(arg)))
+                    for j=i:2:numel(varargin)
+                        arg = varargin{j};
+                        assert(isa('char', class(arg)));
+                        if (strcmp(arg, 'WS'))
+                            ws = varargin{j+1};
+                            if (~isfield(ws, 'height')); ws.height = 5; end
+                            if (~isfield(ws, 'width')); ws.width = 5; end
+                            if (~isfield(ws, 'color')) 
+                                if (self.ch > 1); ws.color = [255 0 0]; else; ws.color = 255; end
+                            end
+                            varargin{j+1} = ws;
+                            break;
+                        end
+                    end
+                    break;            
+                else
+                    % Read the params in order
+                    if (i == 5) % 5th parameter denotes the ws structure
+                        ws = arg;
+                        if (~isfield(ws, 'height')); ws.height = 5; end
+                        if (~isfield(ws, 'width')); ws.width = 5; end
+                        if (~isfield(ws, 'color')) 
+                            if (self.ch > 1); ws.color = [255 0 0]; else; ws.color = 255; end
+                        end
+                        arg = ws; 
+                    end
+                    varargin{i} = arg;
                 end
             end
+
+            if (isempty(ws))
+                ws = struct;
+                ws.height = 5;
+                ws.width = 5;
+                if (self.ch > 1); ws.color = [255 0 0]; else; ws.color = 255; end
+
+                varargin{end + 1} = 'WS';
+                varargin{end + 1} = ws;
+            end
+
+            immap(self.db_matlab, varargin{:});
         end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        function show(self, cls_n, n_per_class, scale, offset) 
+        function show(self, varargin)
             % SHOW: Visualizes the db in a image grid.
             %
             % Parameters
@@ -517,29 +677,30 @@ classdef NNdb < handle
             % offset : int, optional
             %     Image index offset to the dataset. (Default value = 1)
             %
+            % ws : struct, optional
+            %     whitespace between images in the grid.
+            %
+            %     Whitespace Structure (with defaults)
+            %     -----------------------------------
+            %     ws.height = 0;                    % whitespace in height, y direction (0 = no whitespace)  
+            %     ws.width  = 0;                    % whitespace in width, x direction (0 = no whitespace)  
+            %     ws.color  = 0 or 255 or [R G B];  % (0 = black)
+            %
+            % title : string, optional 
+            %     figure title, (Default value = [])
+            %
             % Examples
             % --------
             % Show first 5 subjects with 8 images per subject. (offset = 1)
-            % .Show(5, 8)
+            % nndb.show(5, 8)
             %
             % Show next 5 subjects with 8 images per subject, starting at (5*8 + 1)th image.
-            % .Show(5, 8, [], 5*8 + 1)
+            % nndb.show(5, 8, 'Offset', 5*8 + 1)
             %
             
             % Imports
-            import nnf.utl.immap;
-            
-            if (nargin >= 5)
-                immap(self.db_matlab, cls_n, n_per_class, scale, offset);
-            elseif (nargin >= 4)
-                immap(self.db_matlab, cls_n, n_per_class, scale);
-            elseif (nargin >= 3)
-                immap(self.db_matlab, cls_n, n_per_class);
-            elseif (nargin >= 2)
-                immap(self.db_matlab, cls_n, 1);
-            elseif (nargin >= 1)
-                immap(self.db_matlab, 1, 1);
-            end            
+            import nnf.utl.immap;           
+            immap(self.db_matlab, varargin{:});      
         end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -966,6 +1127,17 @@ classdef NNdb < handle
             % 2D feature matrix (double) compatible for matlab.
             db = double(reshape(self.db_matlab, self.h * self.w * self.ch, self.n));
         end  
+        
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        function nndb = get.zero_to_one(self) 
+            % db converted to 0-1 range. database data type will be converted to double.
+            
+            % Imports
+            import nnf.db.NNdb;
+            
+            % Construct a new object
+            nndb = NNdb([self.name ' (0-1)'], double(self.db)/255, self.n_per_class, false, self.cls_lbl, self.format);            
+        end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         function value = get.im_ch_axis(self) 
