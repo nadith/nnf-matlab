@@ -66,12 +66,14 @@ classdef NNdb < handle
             % format : nnf.db.Format, optinal
             %     Format of the database. (Default value = Format.H_W_CH_N, refer `nnf.db.Format`).
             %             
-
-            disp(['Costructor::NNdb ' name]);
             
             % Imports
-            import nnf.db.Format; 
-                        
+            import nnf.db.Format;
+            import nnf.utl.disp;
+            
+            self.name = name;
+            disp(['Costructor::NNdb ' name]);
+            
             % Set defaults for arguments
             if (nargin < 2), db = []; end
             if (nargin < 3), n_per_class = []; end
