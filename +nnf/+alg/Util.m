@@ -157,12 +157,13 @@ classdef Util
             
             % Set defaults for arguments
             if (nargin < 4), info = []; end
-            if (~isfield(info,'perf')); info.perf = []; end; 
-            if (~isfield(info.perf,'use_mem')); info.perf.use_mem = false; end; 
-            if (~isfield(info,'g_norm')); info.g_norm = false; end; 
+            if (~isfield(info,'perf')); info.perf = []; end
+            if (~isfield(info.perf,'use_mem')); info.perf.use_mem = false; end
+            if (~isfield(info,'g_norm')); info.g_norm = false; end
+            if (~isfield(info,'dist')); info.dist = false; end
             
             % Initialize distance matrix to capture the distance
-            if (isfield(info,'dist'))
+            if (info.dist)
                 assert(numel(unique(nndb_g.n_per_class)) == 1); % All classes has same n_per_class
                 dist = zeros(nndb_p.n, nndb_g.n);
             end           
@@ -234,7 +235,7 @@ classdef Util
                 [mn, idx] = min(gp_diff);
 
                 % Save the distance if required
-                if (isfield(info,'dist'))
+                if (info.dist)
                     dist(te_idx, :) = gp_diff;
                 end                
 
