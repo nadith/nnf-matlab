@@ -27,7 +27,7 @@ nndb_tr.show(10, 8)
 figure, nndb_te.show(10, 4)
 figure, nndb_tr.show_ws(10, 8) % with whitespaces
 % help DbSlice.examples % For extensive help on Db slicing
-            
+
 %% PCA_L2
 import nnf.alg.PCA;
 info = [];
@@ -112,10 +112,36 @@ end
 
 %% SRC
 import nnf.alg.SRC;
-info = [];
-SRC.l1(nndb_tr, nndb_te, info);
+info = []; % - ADMM solver by default
+info.mean_diff = true;
+[accuracy, ~, ~, ~, time] = SRC.l1(nndb_tr, nndb_te, info);
 
-%% High Resolution Database            
+import nnf.alg.SRC;
+info = [];
+info.mean_diff = true;
+info.method.name = 'L1BENCHMARK.FISTA';
+info.method.param.tolerance = 0.0001;
+[accuracy, ~, ~, ~, time] = SRC.l1(nndb_tr, nndb_te, info);
+
+import nnf.alg.SRC;
+info = [];
+info.mean_diff = true;
+info.method.name = 'L1BENCHMARK.L1LS';
+[accuracy, ~, ~, ~, time] = SRC.l1(nndb_tr, nndb_te, info);
+
+import nnf.alg.SRC;
+info= [];
+info.mean_diff = true;
+info.method.name = 'SRV1_9.SRC2.interiorPoint';
+[accuracy, ~, ~, ~, time] = SRC.l1(nndb_tr, nndb_te, info);
+
+import nnf.alg.SRC;
+info = [];
+info.mean_diff = true;
+info.method.name = 'SRV1_9.SRC2.activeSet';
+[accuracy, ~, ~, ~, time] = SRC.l1(nndb_tr, nndb_te, info);
+
+%% High Resolution Database, PLS
 sel.scale                 = 1;
 [nndb_tr0, ~, ~, ~]       = DbSlice.slice(nndb, sel); 
 
