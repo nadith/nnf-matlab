@@ -45,7 +45,7 @@ classdef DbSlice
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     end
         
-    methods (Access = public, Static) 
+    methods (Access = public, Static)
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         % Public Interface
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -389,20 +389,28 @@ classdef DbSlice
             % nndb = NNdb('original', imdb_8, 8, true);
             % sel.tr_col_indices        = [1:3 7:8]; %[1 2 3 7 8]; 
             % sel.tr_noise_rate         = [];
+            % sel.tr_occlusion_rate     = [];
+            % sel.tr_occlusion_type     = [];
+            % sel.tr_occlusion_offset   = [];
             % sel.tr_out_col_indices    = [];
-            % sel.tr_cm_col_indices     = [];
+            % sel.val_col_indices       = [];
+            % sel.val_out_col_indices   = [];
             % sel.te_col_indices        = [4:6]; %[4 5 6]
+            % sel.te_out_col_indices    = [];
+            % sel.nnpatches             = [];
             % sel.use_rgb               = false;
             % sel.color_index           = [];                
             % sel.use_real              = false;
             % sel.scale                 = 0.5;
             % sel.normalize             = false;
             % sel.histeq                = true;
-            % selhistmatch_col_index    = [];
+            % sel.histmatch_col_index   = [];
             % sel.class_range           = [1:36 61:76 78:100];
-            % %sel.pre_process_script    = @custom_pprocess;
+            % sel.val_class_range       = [];
+            % sel.te_class_range        = [];
+            % %sel.pre_process_script   = @fn_custom_pprocess;
             % sel.pre_process_script    = [];
-            % [nndb_tr, ~, nndb_te, ~] = DbSlice.slice(nndb, sel); 
+            % [nndb_tr, ~, nndb_te, ~, ~, ~, ~] = DbSlice.slice(nndb, sel); 
             
             % Imports
             import nnf.db.NNdb;
@@ -776,8 +784,8 @@ classdef DbSlice
             %          
             % Returns
             % -------
-            % nndbs : cell- NNdb
-            %      Updated NNdb objects.
+            % nndbs : `array_like` -nnf.db.NNdb
+            %      Vector of patch databases.
             %  
             
             % Imports 
@@ -848,8 +856,8 @@ classdef DbSlice
             %            
             % Returns
             % -------
-            % img : 3D tensor -uint8
-            %      Corrupted image.
+            % img : `array_like` -uint8
+            %      3D tensor to representing corrupted image.
             %
             
             percentageWhite = 50; % Alter this value as desired
@@ -878,8 +886,8 @@ classdef DbSlice
             %            
             % Returns
             % -------
-            % nndbs : cell- NNdb
-            %      Updated NNdb objects.
+            % nndbs : `array_like` -nnf.db.NNdb
+            %      Vector of patch databases.
             %
             
             % Imports 
@@ -899,8 +907,8 @@ classdef DbSlice
             %            
             % Returns
             % -------
-            % nndbs : cell- NNdb
-            %      Updated NNdb objects.
+            % nndbs : `array_like` -nnf.db.NNdb
+            %      Vector of patch databases.
             %
             
             % Imports 
@@ -920,8 +928,8 @@ classdef DbSlice
             %            
             % Returns
             % -------
-            % nndbs : cell- NNdb
-            %      Updated NNdb objects.
+            % nndbs : `array_like` -nnf.db.NNdb
+            %      Vector of patch databases.
             %
             
             % Imports 
@@ -941,8 +949,8 @@ classdef DbSlice
             %            
             % Returns
             % -------
-            % nndbs : cell- NNdb
-            %      Updated NNdb objects.
+            % nndbs : `array_like` -nnf.db.NNdb
+            %      Vector of patch databases.
             %
             
             % Imports 
@@ -962,8 +970,8 @@ classdef DbSlice
             %            
             % Returns
             % -------
-            % nndbs : cell- NNdb
-            %      Updated NNdb objects.
+            % nndbs : `array_like` -nnf.db.NNdb
+            %      Vector of patch databases.
             %
             
             % Imports 

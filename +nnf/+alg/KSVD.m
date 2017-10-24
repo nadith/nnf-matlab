@@ -25,7 +25,7 @@ classdef KSVD
             %        
             %     Info Structure (with defaults)
             %     -----------------------------------
-            %     info.K = nndb.cls_n; % the number of dictionary elements to train (no. of classes)
+            %     info.K = nndb.cls_n;      % the number of dictionary elements to train (no. of classes)
             %     info.numIteration = 50;   %  
             %
             %     info.L = 3;               % Maximum coefficients to use in OMP coefficient calculations.
@@ -57,11 +57,11 @@ classdef KSVD
             % 
             % Returns
             % -------
-            % D : 2D matrix -double
-            %     Learnt dictionary.
+            % D : `array_like` -double
+            %     2D matrix for learnt dictionary.
          	%
-            % X : 2D matrix -double
-            %     Coefficients for nndb
+            % X : `array_like` -double
+            %     2D matrix for coefficients for nndb
             %
             % Examples
             % --------
