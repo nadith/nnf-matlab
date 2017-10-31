@@ -116,7 +116,7 @@ classdef DbSlice
                 isempty(sel.val_out_col_indices) && ...
                 isempty(sel.te_col_indices) && ...
                 isempty(sel.te_out_col_indices))
-                error('ARG_ERR: [tr|tr_out|val|val_out|te]_col_indices: mandory field');
+                error('ARG_ERR: [tr|tr_out|val|val_out|te]_col_indices: mandatary field');
             end            
             if ((~isempty(sel.use_rgb) && sel.use_rgb) && ~isempty(sel.color_indices))
                 error('ARG_CONFLICT: sel.use_rgb, sel.color_indices');
@@ -276,7 +276,7 @@ classdef DbSlice
                             % Check whether col_idx is a occlusion required index 
                             occl_rate = [];
                             occl_type = [];
-                            occl_offset = [];
+                            occl_offset = 0;
                             if (~isempty(sel.tr_occlusion_rate) && ...
                                     (tci_offsets(dsi) <= numel(sel.tr_occlusion_rate)) && ...
                                     (0 ~= sel.tr_occlusion_rate(tci_offsets(dsi))))
@@ -558,7 +558,7 @@ classdef DbSlice
 
             % 
             % Select 1st 2nd 4th images of each identity for training + 
-            %               add various occlusion types ('t':top, 'b':bottom, 'l':left, 'r':right) of varying degree.
+            %               add various occlusion types ('t':top, 'b':bottom, 'l':left, 'r':right, 'h':horizontal, 'v':vertical) of varying degree.
             %               default occlusion type: 'b'.
             nndb = NNdb('original', imdb_8, 8, true);
             sel = Selection();
@@ -672,13 +672,13 @@ classdef DbSlice
                 st = en - sh + 1; if (st < 0); st = 1; end
                 filter(1:h, st:en) = 0;
 
-            elseif (occl_type == 't')
+            elseif (occl_type == 't' || occl_type == 'v')
                 sh = floor(occl_rate * h);
                 st = floor(occl_offset * h) + 1; 
                 en = st + sh - 1; if (en > h); en = h; end
                 filter(st:en, 1:w) = 0;
 
-            elseif (occl_type == 'l')
+            elseif (occl_type == 'l' || occl_type == 'h')
                 sh = floor(occl_rate * w);
                 st = floor(occl_offset * w) + 1; 
                 en = st + sh - 1; if (en > w); en = w; end
@@ -764,7 +764,7 @@ classdef DbSlice
                 % if image has more than 3 channels
                 if (ch >= 3)                                    
                     if (numel(sel.color_indices) > 0)
-                        X = img(:, :, sel.color_index);                       
+                        X = img(:, :, sel.color_indices);                       
                     else
                         X = rgb2gray(img);
                     end
