@@ -15,6 +15,7 @@ import nnf.utl.illumination_norm;
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Create a NNdb database with AR database (12 images per identity)
 nndb = NNdb('original', imdb_ar, 12, true);
+
 % Basic Selection
 sel = Selection();
 sel.tr_col_indices        = [1:8];              % randperm(12, 8); % Random choice
@@ -347,3 +348,52 @@ accurary = Util.test(W, nndb_tr, nndb_te)
 import nnf.alg.PCA;
 W = PCA.l2(nndb_tr);
 accurary = Util.test(W, nndb_tr, nndb_te)
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Example 5: Structured SRC (Ref: Robust face recognition via occlusion dictionary learning)
+%
+% For Scarf occlusion
+sel = Selection();
+sel.tr_col_indices        = [1:6];
+% sel.histeq                = true;
+sel.val_col_indices       = [9];
+sel.te_col_indices        = [10];
+sel.use_rgb               = false;
+sel.scale                 = [30 30];
+sel.class_range           = [1:76 78:100]; %[1:75 77:100];  %[1:76 78:100];, 77 identity has a total black image
+[nndb_A0, nndb_Ad_Y, nndb_Y, ~, ~, ~, ~] = DbSlice.slice(nndb, sel);
+nndb_A0.show(10, 6);
+figure, nndb_Ad_Y.show(10, 1);
+figure, nndb_Y.show(10, 1);
+
+% Learn a dictionary to represent scarf occlusion
+import nnf.alg.SSRC;
+info=[];
+info.max_iter = 200;
+info.visualize = true;
+nndb_Ad = SSRC.dict_learn_proj_err(nndb_Ad_Y.zero_to_one, nndb_A0.zero_to_one, info);
+
+% Learn coefficients x1, x2 to solve
+% y = A0 * x1 + Ad * x2 + e
+info=[];
+info.lambdas = [0.001 0.001];
+info.max_iter = 200;
+info.visualize = true;
+[coeffs, nndb_reconst] = SSRC.l1(nndb_Y.zero_to_one, [nndb_A0.zero_to_one nndb_Ad], info);
+
+% Peform LDA classification on target database vs the reconstructed via (A0 * x1 + Ad * x2)
+import nnf.alg.LDA;
+info = [];
+W = LDA.l2(nndb_reconst);
+accuracy = Util.test(W, nndb_reconst, nndb_Y)
+
+% TODO: Even though the paper suggests following method for classification, 
+% the reconstruction is not of high quality after (y - Ad * x2)
+P_reconst = nndb_Y.zero_to_one.features - nndb_Ad.features * coeffs{2};
+P_reconst = uint8(P_reconst.*255);
+nndb_P_reconst = NNdb('P_reconst', reshape(P_reconst, nndb_Y.h, nndb_Y.w, nndb_Y.ch, []), nndb_Y.n_per_class, false, nndb_Y.cls_lbl);
+nndb_P_reconst.show(10, 10)
+
+sinfo = [];
+sinfo.coeffs = coeffs{1};
+[accuracy2] = Util.src_test(nndb_A0.zero_to_one, nndb_P_reconst, sinfo);
