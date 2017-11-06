@@ -42,7 +42,7 @@ classdef NNdb < handle
         im_ch_axis;     % Image channel index for an image.
     end
 
-    methods (Access = public) 
+    methods (Access = public)
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         % Public Interface
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%       
@@ -103,7 +103,7 @@ classdef NNdb < handle
         end
       
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%                
-        function nndb = merge(self, nndb)
+        function nndb = merge(self, nndb) 
             % MERGE: `nndb` instance with `self` instance.
             % 
             % Parameters
@@ -175,7 +175,114 @@ classdef NNdb < handle
         end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        function update_attr(self, is_new_class, sample_n)
+        function nndb = concat_features(self, nndb) 
+            % AUGMENT_FEATURES: augment `nndb` instance with `self` instance.
+            %   Both `nndb` and self instances must be in the format Format.H_N or Format.N_H (2D databases)
+            % 
+            % Parameters
+            % ----------
+            % nndb : :obj:`NNdb`
+            %     NNdb object that represents the dataset.
+            %
+        
+            % Imports
+            import nnf.db.NNdb;
+            import nnf.db.Format;
+            
+            assert(self.n == nndb.n);
+            assert(isequal(self.n_per_class, nndb.n_per_class));
+            assert(self.cls_n == nndb.cls_n);
+            assert(strcmp(class(self.db), class(nndb.db)))
+            assert(self.format == nndb.format)
+            assert(self.format == Format.H_N || self.format == Format.N_H);        
+                        
+            if (self.format == Format.H_N)
+                db = [self.db; nndb.db];
+            
+            elseif (self.format == Format.N_H)                
+                db = [self.db nndb.db];
+            end
+            
+            nndb = NNdb('features_augmented', db, self.n_per_class, true, [], self.format);
+        end
+        
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        function self = convert_format(self, format, h, w, ch) 
+            % CONVERT_FORMAT: Convert the format of this `nndb` object to target format.
+            %   h, w, ch are conditionally optional, used only when converting 2D nndb to 4D nndb
+            %   formats.            
+            %
+            % Parameters
+            % ----------
+            % format : nnf.db.Format
+            %     Target format of the database.
+            % 
+            % h : int, optional under conditions
+            %     height to be used when converting from Format.H_N to Format.H_W_CH_N.
+            % 
+            % w : int, optional under conditions
+            %     width to be used when converting from Format.H_N to Format.H_W_CH_N.
+            % 
+            % ch : int, optional under conditions
+            %     channels to be used when converting from Format.H_N to Format.H_W_CH_N.
+            %
+            
+            % Imports
+            import nnf.db.Format;
+            
+            % Fetch datatype
+            dtype = class(self.db);
+            
+            if (self.format == Format.H_W_CH_N || self.format == Format.N_H_W_CH)
+                if (format == Format.H_N)
+                    self.db = cast(self.features, dtype);
+                    self.h = size(self.db, 1);
+                    self.w = 1;
+                    self.ch = 1;
+                    
+                elseif (format == Format.N_H)
+                    self.db = cast(self.features', dtype);
+                    self.h = size(self.db, 2);
+                    self.w = 1;
+                    self.ch = 1;
+                    
+                elseif (format == Format.H_W_CH_N)
+                   self.db = self.db_matlab;                
+                
+                elseif (format == Format.N_H_W_CH)
+                    self.db = self.db_scipy;
+                end
+                
+                self.format = format;
+                
+            elseif (self.format == Format.H_N || self.format == Format.N_H)                
+                
+                if (format == Format.H_W_CH_N)
+                    self.db = reshape(self.db_matlab, h, w, ch, self.n);
+                    self.h = h;
+                    self.w = w;
+                    self.ch = ch;
+                
+                elseif (format == Format.N_H_W_CH)
+                    self.db = reshape(self.db_matlab, self.n, h, w, ch);
+                    self.h = h;
+                    self.w = w;
+                    self.ch = ch;
+                    
+                elseif (format == Format.H_N)
+                    self.db = self.db_matlab;
+                    
+                elseif (format == Format.N_H)
+                    self.db = self.db_scipy;
+                    
+                end
+                
+                self.format = format;
+            end
+        end
+                
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        function update_attr(self, is_new_class, sample_n) 
             % UPDATE_NNDB_ATTR: update self attributes. Used when building the nndb dynamically.
             % 
             % Can invoke this method for every item added (default sample_n=1) or 
@@ -309,6 +416,7 @@ classdef NNdb < handle
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         function data = features_to_data(self, features, h, w, ch, dtype) 
             % FEATURES_TO_DATA: converts the feature matrix to `self` compatible data format and type.
+            %   h, w, ch, dtype are conditionally optional, used only when self.db = []. 
             %
             % Parameters
             % ----------
@@ -397,9 +505,9 @@ classdef NNdb < handle
                 features = normc(features);
             end
         end
-        
+                
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        function [features, m] = get_features_mean_diff(self, cls_lbl, m)
+        function [features, m] = get_features_mean_diff(self, cls_lbl, m) 
             % Get the 2D feature mean difference matrix for specified class labels and mean.
             % 
             % Parameters
@@ -862,148 +970,13 @@ classdef NNdb < handle
             end
             
         end
-                
-        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        function rgb2colors(self, normalized, to15, to22) 
-            % RGB2COLORS: Convert RGB db to 15 or 22 color components.
-            %
-            
-            % Set defaults for arguments
-            if (nargin < 3), to15 = true; end
-            if (nargin < 4), to22 = false; end
-            
-            % Error handling for arguments
-            if (to15 && to22)
-                warning('ARG_CONFLICT: to15, to22');
-            end
-            
-            if (~to15 && ~to22)
-                error('ARG_ERR:to15, to22: both are false');
-            end
-            
-            %%% TRANFORMATION FUNCTIONS
-            ColorTC = cell(1, 1);            
-            ColorTC{1}=[1,0,0;0,1,0;0,0,1]; % RGB
-            ColorTC{2}=[0.607,0.299,0.000;0.174,0.587,0.066;0.201,0.114,1.117]; %XYZ
-            ColorTC{3}=[0.2900,0.5957,0.2115;0.5870,-0.2744,-0.5226;0.1140,-0.3213,0.3111]; %YIQ
-            ColorTC{4}=[1/3,1/2,-1/2;1/3,0,1;1/3,-1/2,-1/2]; %III
-            %YCbCr=[(0.2126*219)/255,(0.2126*224)/(1.8556*255),(0.5*224)/255;(0.7152*219)/255, ...
-            %       (0.7152*224)/((1.8556*255)),-((0.7152*224)/(1.5748*255));..
-            %       (0.0722*219)/255,(0.5*224)/255,-((0.0722*224)/(1.5748*255))];
-            YCbCr_T   = (1/255) * [65.481 -37.797 112; 128.553 -74.203 -93.786; 24.966 112 -18.214];
-            YCbCr_Off = (1/255) * [16 128 128];
-            ColorTC{5}=[0.2990,-0.1471,0.6148;0.5870,-0.2888,-0.5148;0.1140,0.4359,-0.1000]; %YUV
-            ColorTC{6}=[1,-1/3,-1/3;0,2/3,-1/3;0,-1/3,2/3]; %nRGB
-            ColorTC{7}=[0.6070,-0.0343,-0.3940;0.1740,0.2537,-0.3280;0.2000,-0.2193,0.7220]; %nXYZ
-                 
-            % Build the transformation matrix
-            transform = zeros(3, numel(ColorTC)*3);            
-            for i=1:numel(ColorTC)                
-                transform(:, 1+(i-1)*3:i*3) = ColorTC{i}; % transform=[RGB XYZ YIQ III YUV nRGB nXYZ];
-            end
-            
-%             % not supported yet
-%             for i=1:images
-%                 
-%                 YCBCR=rgb2ycbcr(img(:,:,:,i));
-% 
-%                 HSV=rgb2hsv(img(:,:,:,i));
-%                 conv(:,:,1:3,i)=YCBCR(:,:,1:3);
-%                 conv(:,:,4:6,i)=HSV(:,:,1:3);
-% 
-%             end 
-%             conv1   = reshape(conv,row*col,6,images);
-
-            fsize = self.h * self.w;
-            rgb = double(reshape(self.db, fsize, self.ch, [])); 
-            
-            if (to22)
-                % 3 + 3 for YCbCr, HSV
-                tdb = zeros(fsize, size(transform, 2) + 3 + 3, images);
-            else
-                tdb = zeros(fsize, size(transform, 2), images);
-            end           
-            
-            % Set Max, Min for normalization purpose
-            maxT            = transform;
-            maxT(maxT < 0)  = 0;
-            channelMax      = ([255 255 255] * maxT);
-            
-            minT            = transform;
-            minT(minT > 0)  = 0;
-            channelMin      = ([255 255 255] * minT);
-            
-            % Required range
-            newMax          = ones(1, size(transform, 2))*255;
-            newMin          = ones(1, size(transform, 2))*0;
-                        
-            for i=1:self.n   
-                temp = rgb(:,:,i)*transform;       
-                
-                if(normalized)           
-                    %((x - channelMin) * ((newMax - newMin)/ (channelMax - channelMin))) + newMin
-                    temp = bsxfun(@minus, temp, channelMin);
-                    temp = bsxfun(@times, temp, (newMax - newMin)./ (channelMax - channelMin));
-                    temp = bsxfun(@plus, temp, newMin);
-                end          
-                
-                assert(uint8(max(max(temp))) <= max(newMax));
-                assert(uint8(min(min(temp))) >= min(newMin));
-                
-                if (to22)
-                    % YCbCr/HSV Transformation (done explicitely)
-                    % Use this section only if the normalization
-                    % range is [0, 255]
-                    % temp2, temp3 will always be in the range [0, 255]
-                    temp2 = reshape(rgb2ycbcr(reshape(rgb(:,:,i), self.h, self.w, [])), fsize, []);
-                    %temp2 = rgb * YCbCr_T + repmat(YCbCr_Off, row*col, 1)                 
-                    temp3 = reshape(rgb2hsv(reshape(rgb(:,:,i), self.h, self.w, [])), fsize, []);
-
-                    assert(uint8(max(max(temp2))) <= max(newMax));
-                    assert(uint8(min(min(temp2))) >= min(newMin));
-                    assert(uint8(max(max(temp3))) <= max(newMax));
-                    assert(uint8(min(min(temp3))) >= min(newMin));
-
-                    tdb(:,:,i) = [temp temp2 temp3];
-                    
-                else
-                    tdb(:,:,i) = uint8(temp);
-                    
-                end
-            end
-            clear rgb;
-            
-            % not supported yet
-%             for i=1:images
-%                 coo(:,22:27,i)=conv1(:,1:6,i);
-%             end
-
-            % Perform the selection (Mustapha's model)
-            tdb2(:,1:6,:)   = tdb(:,1:6,:);
-            tdb2(:,7:11,:)  = tdb(:,8:12,:);
-            tdb2(:,12:13,:) = tdb(:,14:15,:);
-            tdb2(:,14:15,:) = tdb(:,17:18,:);
-            
-            if (all22)
-                tdb2(:,16:17,:) = tdb(:,20:21,:);
-                tdb2(:,18:22,:) = tdb(:,23:27,:);
-            end
-            % % %  coo2(:,23:25,:)=dcs(:,:,:);            
-            clear tdb;
-            
-            if (to22)
-                self.db = reshape(tdb2, self.h, self.w, 22, self.n);
-            else
-                self.db = reshape(tdb2, self.h, self.w, 15, self.n);
-            end        
-        end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     end
     
     methods (Access = private)
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%        
-        function init_db_fields__(self)
+        function init_db_fields__(self) 
             import nnf.db.Format;
             
             if (self.format == Format.H_W_CH_N)
