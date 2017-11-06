@@ -46,7 +46,7 @@ classdef Map < handle
                 offset = '';
             end
             
-            key_set = keys(self.underlyingMap);
+            key_set = self.get_keys();
             str = '';
             
             for i=1:length(key_set)
@@ -70,7 +70,12 @@ classdef Map < handle
         end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%        
-        function value = get(self,key)
+        function key_set = get_keys(self)
+            key_set = keys(self.underlyingMap);
+        end
+        
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%        
+        function value = get(self, key)
             value = [];
             if (isKey(self.underlyingMap, key))
                 value = self.underlyingMap(key);
