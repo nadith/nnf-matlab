@@ -16,13 +16,22 @@ classdef Util
         % Public Interface
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%        
         function [accuracy, dist] = PLS_test(W1, nndb_g1, W2, nndb_g2, nndb_p, info)
-            % TEST: evaluates classification accurary in the given subspace. 
+            % PLS_TEST: evaluates classification accurary in PLS subspace.
             %
             % Parameters
             % ----------
-            % nndb_g : nnf.db.NNdb
-            %     Gallery database object.
+            % W1 : `array_like`
+            %     Projection matrix.
+            %
+            % nndb_g1 : nnf.db.NNdb
+            %     Gallery1 database for W1 projection matrix.
             % 
+            % W2 : `array_like`
+            %     Projection matrix.
+            %
+            % nndb_g2 : nnf.db.NNdb
+            %     Gallery2 database for W2 projection matrix.
+            %
             % nndb_p : nnf.db.NNdb
             %     Probe database object.
             % 
@@ -42,15 +51,15 @@ classdef Util
             %     Classification accuracy.
          	%
             % dist : 2D matrix -double
-            %     Distance matrix. (Tr.Samples x Te.Samples)
+            %     Distance matrix. (Probe.Samples x Gallery.Samples)
             %
             %
-            % Examples
+            % Examples (TODO)
             % --------
-            % import nnf.alg.PCA;
+            % import nnf.alg.PLS;
             % import nnf.alg.Util;
-            % W = PCA.l2(nndb_tr)
-            % accurary = Util.test(W, nndb_tr, nndb_te)
+            % W = PLS.l2(nndb_tr)
+            % accurary = Util.PLS_test(W, nndb_tr, nndb_te)
             %
         
             % Imports
@@ -114,11 +123,77 @@ classdef Util
             accuracy = (sum(v) / nndb_p.n) * 100;
         end
         
-        function [accuracy, dist] = test(W, nndb_g, nndb_p, info) 
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        function [accuracy, dist] = src_test(nndb_A, nndb_Y, sinfo)
+            % LASS_RECOGN: performs recognition with sparse coefficents and residual calculation.
+            %   min_i ||y - &_i(A * x)||_2^2
+            %
+            % Parameters
+            % ----------
+            % nndb_A : nnf.db.NNdb
+            %     Probe database object.
+            % 
+            % nndb_Y : nnf.db.NNdb
+            %     Probe database object.
+            %
+            % info : struct
+            %     Provide additional information to perform SRC classification.
+            %        
+            %     Info Structure (with defaults)
+            %     -----------------------------------
+            %     inf.coeff = <non-empty>   % Sparse coefficient vectors for samples in nndb_Y.
+            %     inf.dist     = false;     % Calculate distance matrix.
+            %     inf.pp.noise = false;     % Consider error/noise representation with identity matrix.
+            %     inf.pp.normc = false;     % Unit normalize the columns of both probe and gallery matrices.
+            %     inf.pp.mean_diff = false; % Use feature mean differences.
+            %
+            % Returns
+            % -------
+            % accuracy : double
+            %     Classification accuracy.
+         	%
+            % dist : 2D matrix -double
+            %     Distance matrix. (Probe.Samples x Gallery.Samples)
+            %
+            % Examples
+            % --------            
+            % import nnf.alg.SRC;
+            % import nnf.alg.Util;
+            % [accuracy, ~, sinfo] = SRC.l1(nndb_tr, nndb_te);
+            % [accuracy2] = Util.src_test(nndb_tr, nndb_te, sinfo);
+            % assert(accuracy == accuracy2);
+            %
+            
+            % Imports
+            import nnf.alg.SRC;
+            
+            % Set defaults for arguments
+            if (nargin < 3), sinfo = []; end
+            
+            % Set defaults for info fields, if the field does not exist 
+            if (~isfield(sinfo,'coeff')); sinfo.coeff = false; end
+            if (~isfield(sinfo,'dist')); sinfo.dist = false; end
+            if (~isfield(sinfo,'pp')); sinfo.pp = []; end
+            if (~isfield(sinfo.pp,'noise')); sinfo.pp.noise = false; end
+            if (~isfield(sinfo.pp,'normc')); sinfo.pp.normc = false; end
+            if (~isfield(sinfo.pp,'mean_diff')); sinfo.pp.mean_diff = false; end
+                        
+            % Perform preprocessing
+            [A, Y] = SRC.pre_process_(nndb_A, nndb_Y, sinfo.pp);
+             
+            % Peform classification
+            [accuracy, ~, dist] = SRC.lass_recogn_(A, Y, nndb_A.cls_lbl, nndb_Y.cls_lbl, sinfo.coeffs, 2);
+        end
+        
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        function [accuracy, dist] = test(W, nndb_g, nndb_p, info)
             % TEST: evaluates classification accurary in the given subspace. 
             %
             % Parameters
             % ----------
+            % W : `array_like`
+            %     Projection matrix.
+            %
             % nndb_g : nnf.db.NNdb
             %     Gallery database object.
             % 
@@ -130,7 +205,7 @@ classdef Util
             %        
             %     Info Structure (with defaults)
             %     -----------------------------------
-            %     inf.dist     = false;     % Calculate distance matrix. TODO: implement
+            %     inf.dist     = false;     % Calculate distance matrix.
             %     inf.dcc_norm = false;     % Distance metric norm to be used. (false = Use L2 norm)
             %     inf.dcc_sigma= eye(n, n); % Sigma Matrix that describes kernel bandwidth for each class. 
             % 
@@ -141,7 +216,7 @@ classdef Util
             %     Classification accuracy.
          	%
             % dist : 2D matrix -double
-            %     Distance matrix. (Tr.Samples x Te.Samples)
+            %     Distance matrix. (Probe.Samples x Gallery.Samples)
             %
             %
             % Examples
