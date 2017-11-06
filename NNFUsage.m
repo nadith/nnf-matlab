@@ -1,5 +1,6 @@
 % Import classes required for NNdb
 import nnf.db.NNdb;
+import nnf.db.Format;
 import nnf.db.DbSlice;
 import nnf.db.Selection;
 
@@ -14,6 +15,7 @@ import nnf.utl.illumination_norm;
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Create a NNdb database with AR database (12 images per identity)
 nndb = NNdb('original', imdb_ar, 12, true);
+% Basic Selection
 sel = Selection();
 sel.tr_col_indices        = [1:8];              % randperm(12, 8); % Random choice
 sel.te_col_indices        = [9:12];             % setdiff([1:12], sel.tr_col_indices);
@@ -113,33 +115,38 @@ end
 %% SRC
 import nnf.alg.SRC;
 info = []; % - ADMM solver by default
-info.mean_diff = true;
-[accuracy, ~, ~, ~, time] = SRC.l1(nndb_tr, nndb_te, info);
+info.mean_diff = false;
+[accuracy, ~, sinfo] = SRC.l1(nndb_tr, nndb_te, info);
 
 import nnf.alg.SRC;
 info = [];
 info.mean_diff = true;
 info.method.name = 'L1BENCHMARK.FISTA';
 info.method.param.tolerance = 0.0001;
-[accuracy, ~, ~, ~, time] = SRC.l1(nndb_tr, nndb_te, info);
+[accuracy, ~, sinfo] = SRC.l1(nndb_tr, nndb_te, info);
 
 import nnf.alg.SRC;
 info = [];
 info.mean_diff = true;
 info.method.name = 'L1BENCHMARK.L1LS';
-[accuracy, ~, ~, ~, time] = SRC.l1(nndb_tr, nndb_te, info);
+[accuracy, ~, sinfo] = SRC.l1(nndb_tr, nndb_te, info);
 
 import nnf.alg.SRC;
 info= [];
 info.mean_diff = true;
 info.method.name = 'SRV1_9.SRC2.interiorPoint';
-[accuracy, ~, ~, ~, time] = SRC.l1(nndb_tr, nndb_te, info);
+[accuracy, ~, sinfo] = SRC.l1(nndb_tr, nndb_te, info);
 
 import nnf.alg.SRC;
 info = [];
 info.mean_diff = true;
 info.method.name = 'SRV1_9.SRC2.activeSet';
-[accuracy, ~, ~, ~, time] = SRC.l1(nndb_tr, nndb_te, info);
+[accuracy, ~, sinfo] = SRC.l1(nndb_tr, nndb_te, info);
+
+% Alternative to perform classification with residual in SRC
+import nnf.alg.Util;
+[accuracy2] = Util.src_test(nndb_tr, nndb_te, sinfo);
+assert(accuracy == accuracy2);
 
 %% High Resolution Database, PLS
 sel.scale                 = 1;
@@ -263,7 +270,6 @@ nndb_tr.save_dir('C:\ImageDB', false);                  % save all images in sin
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Example 2: Perform LDA, project all training samples to the LDA space and visualize with TSNE.
 %
-import nnf.db.Format;
 w_features = W' * nndb_tr.features;
 nndb_lda = NNdb('LDA', w_features, nndb_tr.n_per_class, true, [], Format.H_N);
 %nndb_lda = NNdb('LDA', w_features, nndb_tr.n_per_class, false, nndb_tr.cls_lbl, Format.H_N);

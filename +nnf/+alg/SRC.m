@@ -8,16 +8,15 @@ classdef SRC
     
     % Copyright 2015-2016 Nadith Pathirage, Curtin University (chathurdara@gmail.com).
     
-    properties        
+    properties 
     end
     
-    methods (Access = public, Static)
+    methods (Access = public, Static) 
     	%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         % Public Interface
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        function [accuracy, dist, sparsity, coeff, time] = l1(nndb_g, nndb_p, info) 
+        function [accuracy, dist, sinfo] = l1(nndb_g, nndb_p, info) 
             % L1: performs SRC with l1-norm.
-            % TODO: return sparse coefficient and perform the recognition in Util class
             %
             % Parameters
             % ----------
@@ -28,13 +27,14 @@ classdef SRC
             %     Target database.
             %
             % info : struct, optional
-            %     Provide additional information to perform SRC. (Default value = []).    
+            %     Provide additional information to perform SRC. (Default value = []).
             %        
             %     Info Structure (with defaults)
             %     -----------------------------------
             %     inf.dist = false;                 % Calculate distance matrix. TODO: implement
             %     inf.noise = false;                % Consider error/noise representation with identity matrix.
-            %     inf.mean_diff = true;             % Use feature mean differences.
+            %     inf.normc = false;                % Unit normalize the columns of both probe and gallery matrices.
+            %     inf.mean_diff = false;            % Use feature mean differences.
             %     inf.lambda = 0.01;                % Lagrange multiplier for constraint: |x|_1 <= epsilon
             %     inf.only_coeff = false;           % Learn only the sparse coefficients. No classification.
             %     inf.method.name = 'DEFAULT.SRC';  % Optimization method. (Default - ADMM).
@@ -76,14 +76,15 @@ classdef SRC
             % distance : double
             %     Distance matrix. (TEST_SAMPLES x GALLERY_SAMPLES)
             %
-            % sparsity : double
-            %     Scalar indicating the sparsity.
-            % 
-            % coeff : `array_like` -double
-            %     Sparse coefficient vector.
-            % 
-            % time : double
-            %     Consumed time in seconds in optimization.
+            % sinfo :  struct
+            %     Provide sparse coefficents and other information from SRC process.
+            %
+            %     Info Structure
+            %     -----------------------------------
+            %     sinf.coeff : `array_like` -double  % Sparse coefficient vectors.
+            %     sinf.sparsity : double             % Scalar indicating the sparsity.
+            %     sinf.time.opt : double             % Consumed time in seconds in optimization.
+            %     sinf.pp : struct                   % Pre-processing information for classification via `Util.src_test`.
             %
             % Examples
             % --------
@@ -101,6 +102,7 @@ classdef SRC
             if (~isfield(info,'dist')); info.dist = false; end
             if (~isfield(info,'noise')); info.noise = false; end
             if (~isfield(info,'mean_diff')); info.mean_diff = false; end
+            if (~isfield(info,'normc')); info.normc = false; end            
             if (~isfield(info,'lambda')); info.lambda = 0.01; end
             if (~isfield(info,'only_coeff')); info.only_coeff = false; end
             if (~isfield(info,'method')); info.method = struct; end
@@ -110,26 +112,9 @@ classdef SRC
             % Initialize output params
             accuracy = [];
             dist = [];
-            sparsity = [];
 
-            A = nndb_g.features;
-            Y = nndb_p.features;
-            
-            if (info.noise)
-                % Augment identity matrix to represent the error sparsely.
-                % Assumption: RSRC assumes error/occlusion/etc are sparse on identity matrix
-                A = [A eye(size(A, 1))];
-            end
-            
-            if (info.mean_diff)
-                m = mean(A, 2);
-                A = A - repmat(m, [1,size(A, 2)]);
-                Y = Y - repmat(m, [1,size(Y, 2)]);
-            end
-            
-            % Normalize columns of matrices
-            A = normc(A);
-            Y = normc(Y);
+            % Perform preprocessing
+            [A, Y] = SRC.pre_process_(nndb_g, nndb_p, info);
                      
             % TODO:
             %
@@ -153,7 +138,7 @@ classdef SRC
                     if (info.only_coeff); options.predicter = ''; end
 
                     % TODO: Troubleshoot POSTIVE DEFNITE error
-                    [testClassPredicted, sparsity, dist, coeff, time] = SRC.src__(A, nndb_g.cls_lbl', Y, options);
+                    [testClassPredicted, sparsity, dist, coeffs, time] = SRC.src__(A, nndb_g.cls_lbl', Y, options);
                                         
                 case {'SRV1_9.SRC2.interiorPoint', 'SRV1_9.SRC2.activeSet', 'SRV1_9.SRC2.proximal', 'SRV1_9.SRC2.smo'}                    
                     options = info.method.param;
@@ -177,36 +162,44 @@ classdef SRC
                     end
                           
                     % Assumption: Normalized before applying SRC algorihm
-                    [testClassPredicted, sparsity, dist, coeff, time] = SRC.SRC2__(A, nndb_g.cls_lbl', Y, options);
+                    [testClassPredicted, sparsity, dist, coeffs, time] = SRC.SRC2__(A, nndb_g.cls_lbl', Y, options);
                                         
                 case {'L1BENCHMARK.FISTA', 'L1BENCHMARK.L1LS'} 
                     options = info.method.param;
                     if (~isfield(options,'lambda')); options.lambda = info.lambda; end
                     if (~isfield(options,'tolerance')); options.tolerance = 1e-04; end
                     
-                    coeff = zeros(size(A, 2), size(Y, 2));                    
+                    coeffs = zeros(size(A, 2), size(Y, 2));                    
                     tic
                     for i=1:size(Y, 2)
                         if (strcmp(info.method.name, 'L1BENCHMARK.FISTA'))
-                            [coeff(:, i)] = SolveFISTA(A, Y(:, i), 'lambda', options.lambda, 'tolerance', options.tolerance);
+                            [coeffs(:, i)] = SolveFISTA(A, Y(:, i), 'lambda', options.lambda, 'tolerance', options.tolerance);
                             
                         else % 'L1BENCHMARK.L1LS'
-                            [coeff(:, i)] = SolveL1LS(A, Y(:, i), 'lambda', options.lambda, 'tolerance', options.tolerance);
+                            [coeffs(:, i)] = SolveL1LS(A, Y(:, i), 'lambda', options.lambda, 'tolerance', options.tolerance);
                         end
                     end
                     time = toc;
-                    sparsity = sum(sum(abs(coeff)<=0.0001))/(size(coeff, 1) * size(coeff, 2));
+                    sparsity = sum(sum(abs(coeffs)<=0.0001))/(size(coeffs, 1) * size(coeffs, 2));
                     
                 case {'DEFAULT.SRC'}
                     tic
-                    coeff = SRC.train_lasso__(A, Y, info.lambda);
+                    coeffs = SRC.train_lasso__(A, Y, info.lambda);
                     time = toc;
-                    sparsity = sum(sum(abs(coeff)<=0.0001))/(size(coeff, 1) * size(coeff, 2));
+                    sparsity = sum(sum(abs(coeffs)<=0.0001))/(size(coeffs, 1) * size(coeffs, 2));
                     
                 otherwise
                     error(['Invalid `info.method.name`: ' info.method.name]);
             end
-
+            
+            % Assign outputs to info structure
+            sinfo.coeffs = coeffs;
+            sinfo.time.opt = time;
+            sinfo.sparsity = sparsity;
+            sinfo.pp.noise = info.noise;
+            sinfo.pp.normc = info.normc;
+            sinfo.pp.mean_diff = info.mean_diff;
+            
             % If only coefficents are required, return from this point.
             if (info.only_coeff); return; end
                         
@@ -219,7 +212,7 @@ classdef SRC
                 accuracy = (sum(testClassPredicted == nndb_p.cls_lbl')/nndb_p.n)* 100;
                                 
             else % L1-BENCHMARK Framework or DEFAULT.SRC - ADMM
-                [accuracy, ~, dist] = SRC.lass_recogn__(A, Y, nndb_g.cls_lbl, nndb_p.cls_lbl, coeff, 2);                
+                [accuracy, ~, dist] = SRC.lass_recogn_(A, Y, nndb_g.cls_lbl, nndb_p.cls_lbl, coeffs, 2);                
             end
             
             % Calculate distance matrix
@@ -237,10 +230,76 @@ classdef SRC
         function SRC_MCC()
             % TODO: SLINDA
         end
+                 
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%       
+    end
+    
+    methods (Access = ?nnf.alg.Util, Static)
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        function [A, Y] = pre_process_(nndb_A, nndb_Y, info)
+            A = nndb_A.features;
+            Y = nndb_Y.features;
+            
+            if (info.noise)
+                % Augment identity matrix to represent the error sparsely.
+                % Assumption: RSRC assumes error/occlusion/etc are sparse on identity matrix
+                A = [A eye(size(A, 1))];
+            end
+            
+            if (info.mean_diff)
+                m = mean(A, 2);
+                A = A - repmat(m, [1,size(A, 2)]);
+                Y = Y - repmat(m, [1,size(Y, 2)]);
+            end
+            
+            % Normalize columns of matrices (optional)
+            if (info.normc)                
+                A = normc(A);
+                Y = normc(Y);
+            end
+        end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        function [ rate, label, dist_matrix ] = lass_recogn(A, Y, lbl_A, lbl_B, coeff, p_norm, pca )
-
+        function [rate, label, dist_matrix] = lass_recogn_(A, Y, lbl_A, lbl_B, coeff, p_norm, pca)
+            % LASS_RECOGN: performs recognition with sparse coefficents and residual calculation.
+            %   min_i ||y - &_i(A * x)||_2^2
+            %
+            % Parameters
+            % ----------
+            % A : `array_like`
+            %     Dictionary matrix. (H x N)
+            %
+            % Y : `array_like`
+            %     Probe image matrix. (H x N)
+            % 
+            % lbl_A : `array_like`
+            %     Vector of cls labels for dictionary `A`.
+            %
+            % lbl_A : `array_like`
+            %     Vector of cls labels for dictionary `A`.
+            %
+            % coeff : `array_like`
+            %     Vector of coefficients for probe image db.
+            %
+            % p_norm : int
+            %     Norm to be utilized in calculating the residual.            
+            % 
+            % Returns
+            % -------
+            % accuracy : double
+            %     Classification accuracy.
+         	%
+            % dist : 2D matrix -double
+            %     Distance matrix. (Tr.Samples x Te.Samples)
+            %
+            % Examples
+            % --------
+            % import nnf.alg.PCA;
+            % import nnf.alg.Util;
+            % W = PCA.l2(nndb_tr)
+            % accurary = Util.test(W, nndb_tr, nndb_te)
+            %
+            
             % Imports
             import nnf.alg.SRC;
             
@@ -256,9 +315,8 @@ classdef SRC
             label = zeros(1,d);
             idGroup = unique(lbl_A(1,:)); idNum = length(idGroup);    
             dist_matrix = zeros(idNum, d); % Residual norm(..) for each class.
-
             for i = 1 : d
-                x = coeff(:,i);        
+                x = coeff(:,i);
                 [temp, dist_matrix(:, i), ~] = SRC.src_pred__(A, Y(:,i), lbl_A(1,:), x, p_norm);        
                 label(i) = temp(1);
                 rate(i) = label(i) == lbl_B(1,i);
@@ -266,7 +324,7 @@ classdef SRC
             rate = sum(rate)/d;
             dist_matrix = dist_matrix';
         end
-         
+        
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     end
     
@@ -328,7 +386,7 @@ classdef SRC
         end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        function x = train_lasso__(A, Y, lamda, pca) 
+        function x = train_lasso__(A, Y, lamda, pca)
             % minimize ||y - A*x||^2 + lambda * |x|_1,            
             
             % Imports
@@ -349,35 +407,6 @@ classdef SRC
             end
         end
 
-        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        function [ rate, label, dist_matrix ] = lass_recogn__(A, Y, lbl_A, lbl_B, coeff, p_norm, pca )
-
-            % Imports
-            import nnf.alg.SRC;
-            
-            % if (error) % For handling the occlusion or error with SRC
-            %     dim1 = size(A, 1);
-            %     A = [A eye(dim1)]; 
-            % end
-            % 
-            % [A, Y] = SRC.pre_process(A, Y, pca);
-
-            d = size(coeff,2); % No. of test samples
-            rate = zeros(1,d);
-            label = zeros(1,d);
-            idGroup = unique(lbl_A(1,:)); idNum = length(idGroup);    
-            dist_matrix = zeros(idNum, d); % Residual norm(..) for each class.
-
-            for i = 1 : d
-                x = coeff(:,i);        
-                [temp, dist_matrix(:, i), ~] = SRC.src_pred__(A, Y(:,i), lbl_A(1,:), x, p_norm);        
-                label(i) = temp(1);
-                rate(i) = label(i) == lbl_B(1,i);
-            end
-            rate = sum(rate)/d;
-            dist_matrix = dist_matrix';
-        end
-        
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         function [ ly, residuals, r] = src_pred__(D, y, lrid, x, p)
             %  label = label(min(||y - R * xi||^2))
