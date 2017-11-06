@@ -10,7 +10,7 @@ classdef PCA < nnf.alg.MCC
     
     % Copyright 2015-2016 Nadith Pathirage, Curtin University (chathurdara@gmail.com).
     
-    properties        
+    properties 
     end
     
     methods (Access = public, Static)
@@ -170,23 +170,25 @@ classdef PCA < nnf.alg.MCC
             if (nargin < 3), info = []; end
             assert(isfield(info,'oc_filter'));
             assert(isfield(info.oc_filter,'percentage'));
+            assert(isfield(info.oc_filter,'offset'));
                                             
             % Fetch eigen faces
             % [W,~,m] = PCA.eig_face_core(nndb_tr.features, info);
                         
             % Reconstruction
-            occlusion_rate = info.oc_filter.percentage;
+            occl_rate = info.oc_filter.percentage;
             if (isfield(info.oc_filter,'type')) 
-                occlusion_type = info.oc_filter.type;
+                occl_type = info.oc_filter.type;
             else
-                occlusion_type = ''; % empty defaults to 'b'
+                occl_type = ''; % empty defaults to 'b'
             end
+            occl_offset = info.oc_filter.offset;
                         
             h = nndb_te.h;
             w = nndb_te.w;
             ch = nndb_te.ch;            
             
-            filter = DbSlice.get_occlusion_patch(h, w, class(nndb_te.db), occlusion_type, occlusion_rate);                                                                                
+            filter = DbSlice.get_occlusion_patch(h, w, class(nndb_te.db), occl_type, occl_rate, occl_offset);                                                                                
             filter = repmat(filter, 1, 1, ch);
             filter = double(diag(filter(:)));
             S = pinv(transpose((transpose(filter*W)*(filter*W))))*transpose(filter*W)* ...
@@ -194,7 +196,7 @@ classdef PCA < nnf.alg.MCC
             
             db_te_r = bsxfun(@plus, W * S, m);
             db_te_r = reshape(uint8(db_te_r), h, w, ch, []);
-            nndb_te_r = NNdb('te_reconst', db_te_r, nndb_te.n_per_class, true, [], nndb_te.format);
+            nndb_te_r = NNdb('te_reconst', db_te_r, nndb_te.n_per_class, nndb_te.build_cls_lbl, nndb_te.cls_lbl, nndb_te.format);
             
             % Visualize eigen faces if required
             if (isfield(info,'visualize') && info.visualize)
