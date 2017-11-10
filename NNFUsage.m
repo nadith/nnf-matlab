@@ -397,3 +397,11 @@ nndb_P_reconst.show(10, 10)
 sinfo = [];
 sinfo.coeffs = coeffs{1};
 [accuracy2] = Util.src_test(nndb_A0.zero_to_one, nndb_P_reconst, sinfo);
+
+% Example 6: Perform Kmeans clustering
+import nnf.alg.KMEANS;
+info = [];
+info.MaxIter = 1000;
+info.Replicates = 5;
+[label,centers]=KMEANS.do(nndb_tr,info);
+

@@ -45,7 +45,7 @@ classdef KMEANS
             
             % Imports
             import nnf.libs.DengCai;
-            import nnf.alg.KMEANS;
+            
             % Set defaults for arguments
             if (nargin < 2), info = []; end
             if (~isfield(info,'MaxIter')); info.MaxIter = 50; end
