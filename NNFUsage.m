@@ -16,6 +16,14 @@ import nnf.utl.illumination_norm;
 % Create a NNdb database with AR database (12 images per identity)
 nndb = NNdb('original', imdb_ar, 12, true);
 
+% % Augmenting dataset
+% import nnf.utl.ImageAugment;
+% info.center_cls_mean = true;
+% info.samples_per_class = 2;
+% info.noise_ratio = 0.2;
+% nndb = ImageAugment.gauss_data_gen(nndb, info, true);
+% nndb.show(10, 14);
+
 % Basic Selection
 sel = Selection();
 sel.tr_col_indices        = [1:8];              % randperm(12, 8); % Random choice
