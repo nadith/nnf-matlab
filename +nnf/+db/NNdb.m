@@ -41,6 +41,69 @@ classdef NNdb < handle
         zero_to_one;    % nndb converted to 0-1 range.
         im_ch_axis;     % Image channel index for an image.
     end
+    
+    methods (Access = public, Static)
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        % Public Interface
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%    
+        function nndb = load_from_dir(dirpath, db_name) 
+            % LOAD_FROM_DIR: Load images from a directory. 
+            % 
+            % Parameters
+            % ----------
+            % dirpath : string
+            %     Path to directory of images sorted in folder per each class.
+            % 
+            % db_name : string, optional
+            %     Name for the nndb object returned. (Default value = 'DB').
+            %
+
+            % Imports
+            import nnf.db.NNdb;
+            import nnf.db.Format;
+
+            % Set defaults for arguments
+            if (nargin < 2); db_name = 'DB'; end
+
+            % Init empty NNdb to collect images
+            nndb = NNdb(db_name, [], [], false, [], Format.H_W_CH_N);
+
+            cls_structs = dir(dirpath);
+            cls_structs = cls_structs(~ismember({cls_structs.name},{'.','..'})); % exclude '.' and '..'
+
+            % Sort the folder names (class names)
+            [~,ndx] = natsortfiles({cls_structs.name}); % indices of correct order
+            cls_structs = cls_structs(ndx);             % sort structure using indices
+
+            % Iterator
+            for cls_i = 1:length(cls_structs)
+
+                cls_name = cls_structs(cls_i).name;
+                cls_dir = fullfile(dirpath, cls_name);
+
+                % img_structs = dir (fullfile(ims_dir, '*.jpg')); % Only jpg files
+                img_structs = dir(cls_dir);
+                img_structs = img_structs(~ismember({img_structs.name},{'.','..'})); % exclude '.' and '..'
+
+                % Sort the image files (file names)
+                [~,ndx] = natsortfiles({img_structs.name}); % indices of correct order
+                img_structs = img_structs(ndx);             % sort structure using indices            
+
+                is_new_class = true;
+                for cls_img_i = 1 : length(img_structs)
+                    img_name = img_structs(cls_img_i).name;
+                    img = imread(fullfile(cls_dir, img_name));
+
+                    % Update NNdb
+                    nndb.add_data(img);
+                    nndb.update_attr(is_new_class);                        
+                    is_new_class = false;                       
+                end
+            end
+        end
+
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    end
 
     methods (Access = public)
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
