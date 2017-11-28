@@ -179,68 +179,61 @@ classdef NNdb < handle
             import nnf.db.NNdb;
             import nnf.db.Format;
             
-            assert(self.h == nndb.h && self.w == nndb.w && self.ch == nndb.ch);
-            assert(self.cls_n == nndb.cls_n);
-            assert(strcmp(class(self.db), class(nndb.db)))
-            assert(self.format == nndb.format)
-        
-            if (self.format == Format.H_W_CH_N)
-                db = cast(zeros(self.h, self.w, self.ch, self.n + nndb.n), class(self.db));
-            elseif (self.format == Format.H_N)
-                db = cast(zeros(self.h * self.w * self.ch, self.n + nndb.n), class(self.db));
-            elseif (self.format == Format.N_H_W_CH)
-                db = cast(zeros(self.n + nndb.n, self.h, self.w, self.ch), class(self.db));
-            elseif (self.format == Format.N_H)
-                db = cast(zeros(self.n + nndb.n, self.h * self.w * self.ch), class(self.db));
+            if (~isempty(self.db) && ~isempty(nndb.db))            
+                assert(self.h == nndb.h && self.w == nndb.w && self.ch == nndb.ch);
+                assert(self.cls_n == nndb.cls_n);
+                assert(strcmp(class(self.db), class(nndb.db)))
+                assert(self.format == nndb.format)
             end
+        
+            nndb_merged = [];
+            format = self.format;
+            cls_n = self.cls_n;
             
-            cls_lbl = uint16(zeros(1, self.n + nndb.n));
-            en = 0;
-            for i=1:self.cls_n
-                % Fetch data from db1
-                cls_st = self.cls_st(i);
-                cls_end = cls_st + uint32(self.n_per_class(i)) - uint32(1);
-                
-                st = en + 1;
-                en = st + self.n_per_class(i) - 1;
-                cls_lbl(st:en) = i .* uint16(ones(1, self.n_per_class(i)));
-                
-                if (self.format == Format.H_W_CH_N)
-                    db(:, :, :, st:en) = self.db(:, :, :, cls_st:cls_end);
-                elseif (self.format == Format.H_N)
-                    db(:, st:en) = self.db(:, cls_st:cls_end);
-                elseif (self.format == Format.N_H_W_CH)
-                    db(st:en, :, :, :) = self.db(cls_st:cls_end, :, :, :);
-                elseif (self.format == Format.N_H)
-                    db(st:en, :) = self.db(cls_st:cls_end, :);
-                end            
-                
-                % Fetch data from db2
-                cls_st = nndb.cls_st(i);
-                cls_end = cls_st + uint32(nndb.n_per_class(i)) - uint32(1);
-                
-                st = en + 1;
-                en = st + nndb.n_per_class(i) - 1;
-                cls_lbl(st:en) = i .* uint16(ones(1, nndb.n_per_class(i)));
-                
-                if (self.format == Format.H_W_CH_N)
-                    db(:, :, :, st:en) = nndb.db(:, :, :, cls_st:cls_end);
-                elseif (self.format == Format.H_N)
-                    db(:, st:en) = nndb.db(:, cls_st:cls_end);
-                elseif (self.format == Format.N_H_W_CH)
-                    db(st:en, :, :, :) = nndb.db(cls_st:cls_end, :, :, :);
-                elseif (self.format == Format.N_H)
-                    db(st:en, :) = nndb.db(cls_st:cls_end, :);
+            if (~isempty(self.db))
+                if (isempty(nndb.db))
+                    nndb_merged = self.clone('merged');
                 end
             end
-                        
-            nndb = NNdb('merged', db, [], false, cls_lbl, self.format);            
+
+            if (~isempty(nndb.db))
+                if (isempty(self.db))
+                    nndb_merged = nndb.clone('merged');
+                end
+            end
+            
+            if (isempty(self.db) && isempty(nndb.db))
+                 nndb_merged = self.clone('merged');
+            end
+            
+            if (isempty(nndb_merged))
+                nndb_merged = NNdb('merged', [], [], false, [], format);
+                
+                for i=1:cls_n
+
+                    % Fetch data from db1
+                    cls_st = self.cls_st(i);
+                    cls_end = cls_st + uint32(self.n_per_class(i)) - uint32(1); 
+                    nndb_merged.add_data(self.get_data_at(cls_st:cls_end));
+
+                    % Fetch data from db2
+                    cls_st = nndb.cls_st(i);
+                    cls_end = cls_st + uint32(nndb.n_per_class(i)) - uint32(1);
+                    nndb_merged.add_data(nndb.get_data_at(cls_st:cls_end));
+
+                    % Update related paramters after adding data in the above step
+                    nndb_merged.update_attr(true, self.n_per_class(i) + nndb.n_per_class(i));
+                end
+            end
+            
+            nndb = nndb_merged;
         end
-        
+                
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         function nndb = concat_features(self, nndb) 
-            % AUGMENT_FEATURES: augment `nndb` instance with `self` instance.
-            %   Both `nndb` and self instances must be in the format Format.H_N or Format.N_H (2D databases)
+            % CONCAT_FEATURES: Concat `nndb` instance features with `self` instance features.
+            %   Both `nndb` and self instances must be in the format Format.H_N 
+            %   or Format.N_H (2D databases)
             % 
             % Parameters
             % ----------
@@ -590,7 +583,7 @@ classdef NNdb < handle
         end
                 
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        function [features, m] = get_features_mean_diff(self, cls_lbl, m) 
+        function [nndb, m] = get_features_mean_diff(self, cls_lbl, m) 
             % Get the 2D feature mean difference matrix for specified class labels and mean.
             % 
             % Parameters
@@ -603,20 +596,25 @@ classdef NNdb < handle
             % 
             % Returns
             % -------
-            % features : `array_like` -double
-            %       2D feature difference matrix.
+            % nndb : :obj:`NNdb`
+            %     NNdb object (Format.H_N) that represents the mean-diff dataset.
             %
             % m : `array_like` -double
             %       Calculated mean.
-            %            
+            %        
+            
+            % Imports
+            import nnf.db.NNdb;
+            import nnf.db.Format;
             
             if (nargin < 2); cls_lbl = []; end  
             if (nargin < 3); m = []; end  
             
-            features = self.get_features(cls_lbl)
+            features = self.get_features(cls_lbl);
             if (isempty(m)); m = mean(features, 2); end
            
             features = (features - repmat(m, [1, self.n]));
+            nndb = NNdb([self.name ' (mean-diff)'], features, self.n_per_class, false, self.cls_lbl, Format.H_N);
         end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%      
@@ -754,13 +752,16 @@ classdef NNdb < handle
         end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        function new_nndb = clone(self, name) 
+        function nndb = clone(self, name) 
             % CLONE: Creates a copy of this NNdb object
             %
             % Imports 
             import nnf.db.NNdb;
-            
-            new_nndb = NNdb(name, self.db, self.n_per_class, self.build_cls_lbl, self.cls_lbl, self.format);
+            if (~isempty(self.cls_lbl))
+                nndb = NNdb(name, self.db, self.n_per_class, false, self.cls_lbl, self.format);
+            else
+                nndb = NNdb(name, self.db, self.n_per_class, self.build_cls_lbl, self.cls_lbl, self.format);
+            end
         end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -937,12 +938,12 @@ classdef NNdb < handle
         end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        function save_to_dir(self, filepath, create_cls_dir) 
+        function save_to_dir(self, dirpath, create_cls_dir) 
             % Save images to a directory. 
             % 
             % Parameters
             % ----------
-            % path : string
+            % dirpath : string
             %     Path to directory.
             % 
             % create_cls_dir : bool, optional
@@ -953,32 +954,32 @@ classdef NNdb < handle
             if (nargin < 3); create_cls_dir = true; end
             
             % Make a new directory to save images
-            if (~isempty(filepath) && exist(filepath, 'dir') == 0)
-                mkdir(filepath);
+            if (~isempty(dirpath) && exist(dirpath, 'dir') == 0)
+                mkdir(dirpath);
             end
             
             img_i = 1;
             for cls_i=1:self.cls_n
 
                 cls_name = num2str(cls_i); 
-                if (create_cls_dir && exist(fullfile(filepath, cls_name), 'dir') == 0)
-                    mkdir(fullfile(filepath, cls_name));
+                if (create_cls_dir && exist(fullfile(dirpath, cls_name), 'dir') == 0)
+                    mkdir(fullfile(dirpath, cls_name));
                 end
 
                 for cls_img_i=1:self.n_per_class(cls_i)
                     if (create_cls_dir)
                         img_name = num2str(cls_img_i);
-                        imwrite(self.get_data_at(img_i), fullfile(filepath, cls_name, [img_name '.jpg']), 'jpg');
+                        imwrite(self.get_data_at(img_i), fullfile(dirpath, cls_name, [img_name '.jpg']), 'jpg');
                     else                
                         img_name = [cls_name '_' num2str(cls_img_i)];
-                        imwrite(self.get_data_at(img_i), fullfile(filepath, [img_name '.jpg']), 'jpg');
+                        imwrite(self.get_data_at(img_i), fullfile(dirpath, [img_name '.jpg']), 'jpg');
                     end
                     
                     img_i = img_i + 1;
                 end
             end
         end
-            
+
        	%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         function plot(self, n, offset) 
             % PLOT: plots the features.
@@ -1194,7 +1195,7 @@ classdef NNdb < handle
             import nnf.db.NNdb;
             
             % Construct a new object
-            nndb = NNdb([self.name ' (0-1)'], double(self.db)/255, self.n_per_class, false, self.cls_lbl, self.format);            
+            nndb = NNdb([self.name ' (0-1)'], double(self.db)/255, self.n_per_class, false, self.cls_lbl, self.format);
         end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
