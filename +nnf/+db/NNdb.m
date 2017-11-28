@@ -270,6 +270,26 @@ classdef NNdb < handle
         end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        function [self] = fliplr(self)
+            % FLIPLR: Flip the image order in each class of this `nndb` object.            
+            % 
+            
+            dtype = class(self.db);
+            features = self.features;
+            self.db = [];
+            for i=1:self.cls_n
+                cls_st = self.cls_st(i);
+                cls_end = cls_st + uint32(self.n_per_class(i)) - uint32(1);
+                             
+                tmp = features(:, cls_st:cls_end);
+                tmp = fliplr(tmp);
+                        
+                % Add data according to the format (dynamic allocation)
+                self.add_data(self.features_to_data(tmp, self.h, self.w, self.ch, dtype));                  
+            end
+        end
+        
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         function self = convert_format(self, format, h, w, ch) 
             % CONVERT_FORMAT: Convert the format of this `nndb` object to target format.
             %   h, w, ch are conditionally optional, used only when converting 2D nndb to 4D nndb
