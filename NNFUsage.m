@@ -43,13 +43,13 @@ figure, nndb_tr.show_ws(10, 8) % with whitespaces
 import nnf.alg.PCA;
 info = [];
 W = PCA.l2(nndb_tr);
-accurary = Util.test(W, nndb_tr, nndb_te)
+accuracy = Util.test(W, nndb_tr, nndb_te)
 
 % PCA_MCC
 import nnf.alg.PCA;
 info = [];
 W = PCA.mcc(nndb_tr);
-accurary = Util.test(W, nndb_tr, nndb_te)
+accuracy = Util.test(W, nndb_tr, nndb_te)
 
 % PCA-MCC (old implementation) - deprecated
 % features_tr = reshape(nndb_tr.db, nndb_tr.h * nndb_tr.w * nndb_tr.ch, nndb_tr.n);
@@ -70,32 +70,32 @@ info = [];
 for i=[100:10:360]
     info.t = i;
     [W, ki] = KPCA.l2(nndb_tr, info);
-    accurary = Util.test(W, nndb_tr, nndb_te, ki)
+    accuracy = Util.test(W, nndb_tr, nndb_te, ki)
 end
 
 %% LDA_L2 Fisher Faces
 import nnf.alg.LDA;
 info = [];
 W = LDA.fl2(nndb_tr);
-accurary = Util.test(W, nndb_tr, nndb_te)
+accuracy = Util.test(W, nndb_tr, nndb_te)
 
 % Direct LDA
 import nnf.alg.LDA;
 info = [];
 [W, info] = LDA.dl2(nndb_tr, info);
-accurary = Util.test(W, nndb_tr, nndb_te)
+accuracy = Util.test(W, nndb_tr, nndb_te)
 
 % LDA_L2 Regularized
 import nnf.alg.LDA;
 info = [];
 W = LDA.l2(nndb_tr);
-accurary = Util.test(W, nndb_tr, nndb_te)
+accuracy = Util.test(W, nndb_tr, nndb_te)
 
 % R1/L1 LDA
 import nnf.alg.LDA;
 info = [];
 W = LDA.r1(nndb_tr);
-accurary = Util.test(W, nndb_tr, nndb_te)
+accuracy = Util.test(W, nndb_tr, nndb_te)
 
 % R1/L1 LDA (old implementation) - deprecated
 % features_tr = reshape(nndb_tr.db, nndb_tr.h * nndb_tr.w * nndb_tr.ch, nndb_tr.n);
@@ -108,7 +108,7 @@ info = [];
 for i=[6000:10:15000]
     info.t = i;
     [W, ki] = KDA.l2(nndb_tr, info);
-    accurary = Util.test(W, nndb_tr, nndb_te, ki)
+    accuracy = Util.test(W, nndb_tr, nndb_te, ki)
 end
 
 % KDA_L2 Regularized
@@ -118,7 +118,7 @@ info.Regu = true;
 for i=[100:10:360]
     info.t = i;
     [W, ki] = KDA.l2(nndb_tr, info);
-    accurary = Util.test(W, nndb_tr, nndb_te, ki)
+    accuracy = Util.test(W, nndb_tr, nndb_te, ki)
 end
 
 %% SRC
@@ -192,15 +192,15 @@ sel.te_col_indices = [3 5 6 7 10 12];
 import nnf.alg.LDA;
 info = [];
 W = LDA.fl2(nndb_tr);
-accurary = Util.test(W, nndb_tr, nndb_te)
+accuracy = Util.test(W, nndb_tr, nndb_te)
 
 info.Regu = 1;
 W = LDA.l2(nndb_tr, info);
-accurary = Util.test(W, nndb_tr, nndb_te)
+accuracy = Util.test(W, nndb_tr, nndb_te)
 
 import nnf.alg.PCA;
 W = PCA.l2(nndb_tr);
-accurary = Util.test(W, nndb_tr, nndb_te)
+accuracy = Util.test(W, nndb_tr, nndb_te)
 
 
 %% TSNE
@@ -314,15 +314,15 @@ sel.te_col_indices = [3 5 6 7 10 12];
 import nnf.alg.LDA;
 info = [];
 W = LDA.fl2(nndb_tr);
-accurary = Util.test(W, nndb_tr, nndb_te)
+accuracy = Util.test(W, nndb_tr, nndb_te)
 
 info.Regu = 1;
 W = LDA.l2(nndb_tr, info);
-accurary = Util.test(W, nndb_tr, nndb_te)
+accuracy = Util.test(W, nndb_tr, nndb_te)
 
 import nnf.alg.PCA;
 W = PCA.l2(nndb_tr);
-accurary = Util.test(W, nndb_tr, nndb_te)
+accuracy = Util.test(W, nndb_tr, nndb_te)
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Example 4: Perform TSNE, then classfication algorithm for recognition.
@@ -347,15 +347,15 @@ sel.te_col_indices        = [3 5 6 7 10 12];
 import nnf.alg.LDA;
 info = [];
 W = LDA.l2(nndb_tr);
-accurary = Util.test(W, nndb_tr, nndb_te)
+accuracy = Util.test(W, nndb_tr, nndb_te)
 
 info.Regu = 1;
 W = LDA.l2(nndb_tr, info);
-accurary = Util.test(W, nndb_tr, nndb_te)
+accuracy = Util.test(W, nndb_tr, nndb_te)
 
 import nnf.alg.PCA;
 W = PCA.l2(nndb_tr);
-accurary = Util.test(W, nndb_tr, nndb_te)
+accuracy = Util.test(W, nndb_tr, nndb_te)
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Example 5: Structured SRC (Ref: Robust face recognition via occlusion dictionary learning)

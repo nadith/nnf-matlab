@@ -31,7 +31,7 @@ classdef DskmanDataIterator < nnf.core.iters.DataIterator
     % 
     % Notes
     % -----
-    % Union operations may result in ommitting duplicate entries in class ranges or 
+    % Union operations may result in omitting duplicate entries in class ranges or
     % column ranges. This is addressed in the code.        
     %
     % Perf for col_ranges and cls_ranges done since the lookup is performed on sorted cls_range and
@@ -67,17 +67,17 @@ classdef DskmanDataIterator < nnf.core.iters.DataIterator
     
     methods (Access = public)
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        function self = DskmanDataIterator(db_pp_params)
+        function self = DskmanDataIterator(pp_params)
             % Constructor of the abstract class :obj:`DataIterator`.
             % 
-            % Must call init() to intialize the instance.
+            % Must call init_ex() to intialize the instance.
             % 
             % Parameters
             % ----------
-            % db_pp_params : :obj:`dict`
+            % pp_params : :obj:`dict`
             %     Pre-processing parameters for :obj:`ImageDataPreProcessor`.
             %
-            self = self@nnf.core.iters.DataIterator(db_pp_params);            
+            self = self@nnf.core.iters.DataIterator(pp_params);            
             
             % List of class ranges (list of lists)
             % i.e 
@@ -99,10 +99,14 @@ classdef DskmanDataIterator < nnf.core.iters.DataIterator
         end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        function init(self, cls_ranges, col_ranges, read_data)
+        function init_ex(self, cls_ranges, col_ranges, read_data)
             % Imports
             import nnf.db.Dataset 
 
+            % gen_next is ignored since using a custom 'self._gen_next' below
+            % iter_param is ignored since it's not applicable in this context
+            self.init([], []);
+        
             % PERF: Whether to read the data
             self.read_data_ = read_data;
         
@@ -151,7 +155,7 @@ classdef DskmanDataIterator < nnf.core.iters.DataIterator
             %     --------------
             %     LIMITATION: sel.cls_range = [0, 0, 0, 2] is not supported
             %         Reason: since the effect gets void due to the union operation
-            %         TODO:   Copy and append sel.xx_col_indices to it self when 
+            %         TODO:   Copy and append sel.xx_col_indices to itself when 
             %                 there is a class repetition        
             %
             
@@ -446,7 +450,7 @@ classdef DskmanDataIterator < nnf.core.iters.DataIterator
                                                             cls_counter, ...
                                                             clses_visited, ...
                                                             dataset_count)
-            % Filter range indices by class index (cls_idx) and coloumn index (col_index).
+            % Filter range indices by class index (cls_idx) and column index (col_index).
             % 
             % Handle repeated columns as well as processing special enum values. i.e Select.ALL|...
             % 

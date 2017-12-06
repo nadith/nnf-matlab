@@ -52,7 +52,6 @@ classdef Iterator < handle
         function [indices, current_index, current_batch_size] = flow_index(self)
             % [LIMITATION: PYTHON-MATLAB]
             N = self.N;
-            batch_size = self.batch_size;
             seed = self.seed;
             
             if (~self.is_in_loop)
@@ -71,9 +70,9 @@ classdef Iterator < handle
                     end
                 end
 
-                current_index = mod((self.batch_index * batch_size), N) + 1;
-                if (N >= current_index + batch_size)
-                    current_batch_size = batch_size;
+                current_index = mod((self.batch_index * self.batch_size), N) + 1;
+                if (N >= current_index + self.batch_size)
+                    current_batch_size = self.batch_size;
                     self.batch_index = self.batch_index + 1;
                 else
                     current_batch_size = N - current_index + 1;
@@ -94,7 +93,7 @@ classdef Iterator < handle
         % NO NEED
         % function self = iter__(self)
         %     % needed if we want to do something like:
-        %     % for x, y in data_gen.flow(...):
+        %     % for x, y in data_gen.flow_ex(...):
         %     return self;
         % end
         % function next = next__(self, *args, **kwargs)

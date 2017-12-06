@@ -70,6 +70,38 @@ classdef DskmanMemDataIterator < nnf.core.iters.DskmanDataIterator
             % Image channel axis.
             im_ch_axis = self.nndb.im_ch_axis;
         end
+                
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        function release_(self)
+            % Release internal resources used by the iterator.
+            release_@nnf.core.iters.DskmanDataIterator();
+            self.nndb = [];
+            self.save_to_dir_ = [];
+        end 
+        
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        function [cimg, frecord] = get_cimg_frecord(self, cls_idx, col_idx)
+            % Get image and file record (frecord) at cls_idx, col_idx.
+            % 
+            % Parameters
+            % ----------
+            % cls_idx : int
+            %     Class index. Belongs to `union_cls_range`.
+            % 
+            % col_idx : int
+            %     Column index. Belongs to `union_col_range`.
+            % 
+            % Returns
+            % -------
+            % `array_like`
+            %     Color image.
+            % 
+            % :obj:`list`
+            %     file record. [file_path, file_position, class_label]
+        	%
+            
+            [cimg, frecord] = self.get_cimg_frecord_in_next_(self, cls_idx, col_idx);            
+        end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     end
@@ -77,14 +109,6 @@ classdef DskmanMemDataIterator < nnf.core.iters.DskmanDataIterator
     methods (Access = protected)
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         % Protected Interface
-        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        function release_(self)
-            % Release internal resources used by the iterator.
-            release_@nnf.core.iters.DskmanDataIterator();
-            self.nndb = [];
-            self.save_to_dir_ = [];
-        end        
-
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         function [cimg, frecord] = get_cimg_frecord_in_next_(self, cls_idx, col_idx)
             % Get image and file record (frecord) at cls_idx, col_idx.

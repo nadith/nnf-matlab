@@ -103,7 +103,7 @@ classdef NNPatch < handle
         end
 
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        function init_nnpatch_fields(self, pimg, format)
+        function init_nnpatch_fields(self, pimg, db_format)
             % Initialize the fields of `nnpatch` with the information provided.
             % 
             % .. warning:: Offset field will not be set via this method.
@@ -113,21 +113,21 @@ classdef NNPatch < handle
             % pimg : `array_like`
             %     Color image patch or raw data item.
             % 
-            % format : nnf.db.Format
+            % db_format : nnf.db.Format
             %     Format of the database.
             %
             % TODO: offset needs to be adjusted accordingly
-            if (format == Format.H_W_CH_N)
+            if (db_format == Format.H_W_CH_N)
                 [self.h, self.w, ~] = size(pimg.shape);
 
-            elseif (format == Format.H_N)
+            elseif (db_format == Format.H_N)
                 self.w = 1;
                 self.h = size(pimg, 1);
 
-            elseif (format == Format.N_H_W_CH)
+            elseif (db_format == Format.N_H_W_CH)
                 [self.h, self.w, ~] = pimg.shape;
 
-            elseif (format == Format.N_H)
+            elseif (db_format == Format.N_H)
                 self.w = 1;
                 self.h = size(pimg, 1);
             end            
@@ -198,7 +198,7 @@ classdef NNPatch < handle
             %     List of iterstores for :obj:`DataIterator`.
             % 
             % dict_iterstore : :obj:`dict`
-            %     Dictonary of iterstores for :obj:`DataIterator`.
+            %     Dictionary of iterstores for :obj:`DataIterator`.
             % 
             % dbparam_save_dirs : :obj:`list`
             %     Paths to temporary directories for each user db-param of this
@@ -218,7 +218,7 @@ classdef NNPatch < handle
                 model = self.nnmodels(i);
                 model.add_nnpatches(self);
                 model.add_iterstores(list_iterstore, dict_iterstore);
-                model.add_save_to_dirs(dbparam_save_dirs);
+                model.add_save_dirs(dbparam_save_dirs);
             end
         end
 
@@ -282,9 +282,21 @@ classdef NNPatch < handle
             % Returns
             % -------
             % str
-            %     Patch idenfication string. May not be unique.
-            %            
-            value = sprintf('{%d}_{%d}_{%d}_{%d}', self.offset(0), self.offset(1), self.h, self.w);
+            %     Patch identification string. May not be unique.
+            % 
+                        
+            if (~isempty(height) && ~isempty(width))
+                value = sprintf('{%d}_{%d}_{%d}_{%d}', self.offset(0), self.offset(1), self.h, self.w);
+            
+            elseif (~isempty(height) && isempty(width))
+                value = sprintf('{%d}_{%d}_{%d}_W', self.offset(0), self.offset(1), self.h, self.w);
+            
+            elseif (isempty(height) && ~isempty(width))
+                value = sprintf('{%d}_{%d}_H_{%d}', self.offset(0), self.offset(1), self.h, self.w);
+                
+            elseif (isempty(height) && isempty(width))
+                value = sprintf('{%d}_{%d}_H_W', self.offset(0), self.offset(1), self.h, self.w);
+            end
         end
     end
 end

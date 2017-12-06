@@ -27,7 +27,7 @@ classdef NumpyArrayIterator < nnf.core.iters.Iterator
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         % Public Interface
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        function self = NumpyArrayIterator(X, y, nb_class, image_data_pp, params)
+        function self = NumpyArrayIterator(X, y, nb_class, imdata_pp, params)
             % Construct a :obj:`NumpyArrayIterator` instance.
             % 
             % Parameters
@@ -38,7 +38,7 @@ classdef NumpyArrayIterator < nnf.core.iters.Iterator
             % y : `array_like`
             %     Vector indicating the class labels.
             % 
-            % image_data_pp : :obj:`ImageDataPreProcessor`
+            % imdata_pp : :obj:`ImageDataPreProcessor`
             %     Image data pre-processor.
             % 
             % params : :obj:`dict`
@@ -121,7 +121,7 @@ classdef NumpyArrayIterator < nnf.core.iters.Iterator
             self.y = y;
             
             self.input_vectorized = input_vectorized;
-            self.image_data_generator = image_data_pp;
+            self.image_data_generator = imdata_pp;
             self.data_format = data_format;
             self.image_shape = image_shape;
             
@@ -264,16 +264,16 @@ classdef NumpyArrayIterator < nnf.core.iters.Iterator
         end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        function release(self)
+            % Release internal resources used by the iterator.
+        end
+        
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     end
     
     methods (Access = protected)
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         % Protected Interface
-        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        function release(self)
-            % Release internal resources used by the iterator.
-        end
-
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         function x = get_data_(self, X, j)
             % Load image from in memory database, pre-process and return.
