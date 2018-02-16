@@ -45,7 +45,37 @@ classdef NNdb < handle
     methods (Access = public, Static)
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         % Public Interface
-        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%    
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        function nndb = load(filepath, db_name) 
+            % LOAD: Load images from a matfile.
+            % 
+            % Parameters
+            % ----------
+            % filepath : string
+            %     Path to the file.
+            % 
+            % Notes
+            % -----
+            % db_format of the datafile loaded must be Matlab default db_format = Format.H_W_CH_N
+            %
+
+            % Imports
+            import nnf.db.NNdb;
+            import nnf.db.Format;
+
+            % Set defaults for arguments
+            if (nargin < 2); db_name = 'DB'; end
+
+            imdb_obj = load(filepath);
+                   
+            if (mat.cls_lbl ~= [])
+                nndb = NNdb(db_name, imdb_obj.db, [], False, mat.cls_lbl);
+            else
+                nndb = NNdb(db_name, imdb_obj.db, imdb_obj.n_per_class, true);
+            end
+        end
+        
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         function nndb = load_from_dir(dirpath, db_name) 
             % LOAD_FROM_DIR: Load images from a directory. 
             % 
@@ -662,7 +692,8 @@ classdef NNdb < handle
             if (~isempty(cls_lbl))
                 [~,~,IC] = unique(cls_lbl, 'stable');
                 if (~isequal(sort(IC), IC))
-                    error(['Data belong to same class need to be placed in consecutive blocks']);
+                    error(['Data belong to same class need to be placed in consecutive blocks' ...
+                                'Hence the class labels should be sorted order.']);
                 end
             end
             

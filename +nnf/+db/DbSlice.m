@@ -37,7 +37,7 @@ classdef DbSlice
         % Public Interface
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         function [nndbs_tr, nndbs_val, nndbs_te, nndbs_tr_out, nndbs_val_out, nndbs_te_out, edatasets] = ...
-                                                                    slice(nndb, sel, data_generator, pp_param) 
+                                                                    slice(nndb, sel, data_generator, pp_param, savepath) 
             % SLICE: slices the database according to the selection structure.
             % IMPL_NOTES: The new db will contain img at consecutive locations for duplicate indices
             % i.e Tr:[1 2 3 1], DB:[1 1 2 3]
@@ -109,6 +109,11 @@ classdef DbSlice
                 error('ARG_CONFLICT: sel.use_rgb, sel.color_indices');
             end                                              
 
+            % Set defaults
+            if (nargin < 5)
+                savepath = [];
+            end
+            
             % Set defaults for data generator   
             if (nargin < 3 || isempty(data_generator))
                 if (nargin < 4); pp_param = []; end
@@ -308,7 +313,21 @@ classdef DbSlice
             end
 
             % Returns NNdb object instead of NNdb array (non patch requirement)
-            if (isempty(sel.nnpatches))      
+            if (isempty(sel.nnpatches)) 
+                
+                % Save the splits in the disk
+                if ~isempty(savepath)        
+                    [filepath, name, ~] = fileparts(savepath);
+                    datasets = Dataset.get_enum_list();
+                    for i=1:numel(datasets)
+                        dataset = datasets(i);                        
+                        tmp_nndb = DbSlice.p0_nndbs(dict_nndbs, uint32(dataset))
+                        if ~isempty(tmp_nndb)                            
+                            tmp_nndb.save(fullfile(filepath, name) + "_" + str.upper(str(dataset)) + ".mat");
+                        end
+                    end
+                end
+                
                 nndbs_tr = DbSlice.p0_nndbs_(dict_nndbs, uint32(Dataset.TR));
                 nndbs_val = DbSlice.p0_nndbs_(dict_nndbs, uint32(Dataset.VAL));
                 nndbs_te = DbSlice.p0_nndbs_(dict_nndbs, uint32(Dataset.TE));
@@ -318,6 +337,24 @@ classdef DbSlice
                 edatasets = [Dataset.TR Dataset.VAL Dataset.TE Dataset.TR_OUT Dataset.VAL_OUT Dataset.TE_OUT];
                 return;
             end  
+                        
+            % Save the splits in the disk
+            if ~isempty(savepath)
+                [filepath, name, ~] = fileparts(savepath);
+                datasets = Dataset.get_enum_list();
+                for i=1:numel(datasets)
+                    dataset = datasets(i); 
+                    tmp_nndbs = [];
+                    if ~isempty(dict_nndbs(uint32(dataset))); tmp_nndbs = dict_nndbs(uint32(dataset)); end                        
+                    if ~isempty(tmp_nndbs)
+                        nndb_count = numel(tmp_nndbs);
+                        for pi=1:nndb_count
+                            tmp_nndb = tmp_nndb(pi);
+                            tmp_nndb.save(fullfile(filepath, name) + "_" + str.upper(str(dataset)) + "_" + str(pi) + ".mat");
+                        end
+                    end                    
+                end
+            end
             
             nndbs_tr = dict_nndbs(uint32(Dataset.TR));
             nndbs_val = dict_nndbs(uint32(Dataset.VAL));
