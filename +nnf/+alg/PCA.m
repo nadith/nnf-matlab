@@ -1,5 +1,5 @@
 classdef PCA < nnf.alg.MCC
-    %PCA: Principle Component Analysis algorithm and varients.
+    % PCA: Principle Component Analysis algorithm and varients.
     %   Refer method specific help for more details. 
     %
     %   Currently Support:
@@ -32,7 +32,6 @@ classdef PCA < nnf.alg.MCC
             %     -----------------------------------
             %     inf.ReducedDim = 0;     % No of dimension (0 = keep all)  
             %     inf.visualize  = false; % Visualize eigen faces
-            % 
             % 
             % Returns
             % -------

@@ -157,15 +157,33 @@ import nnf.alg.Util;
 [accuracy2] = Util.src_test(nndb_tr, nndb_te, sinfo);
 assert(accuracy == accuracy2);
 
-%% High Resolution Database, PLS
-sel.scale                 = 1;
-[nndb_tr0, ~, ~, ~]       = DbSlice.slice(nndb, sel); 
+%% Partial Least Squares (PLS)
+sel.tr_col_indices          = [1:4];
+sel.te_col_indices          = [5 6];
+
+% Low Resolution database
+sel.scale                   = 0.25;
+[nndb_tr_lr, ~, nndb_te_lr, ~, ~, ~, ~]= DbSlice.slice(nndb, sel); 
+
+% High Resolution Database
+sel.scale                   = 0.5;
+[nndb_tr_hr, ~, ~, ~, ~, ~, ~]= DbSlice.slice(nndb, sel); 
 
 import nnf.alg.PLS;
 info = [];
 info.bases = 100;
-[W_HR, W_LR] = PLS.l2(nndb_tr0, nndb_tr, info);
-accurary = Util.PLS_test(W_HR, nndb_tr0, W_LR, nndb_tr, nndb_te);
+info.bases = 0;
+[W_HR, W_LR] = PLS.l2(nndb_tr_hr, nndb_tr_lr, info);
+
+g_db = [W_HR' * nndb_tr_hr.features  W_LR' * nndb_tr_lr.features];
+g_lbl = [nndb_tr_hr.cls_lbl nndb_tr_lr.cls_lbl];
+p_db = W_LR' * nndb_te_lr.features;
+p_lbl = nndb_te_lr.cls_lbl;
+
+nndb_gal = NNdb('Gal', g_db, [], false, g_lbl, Format.H_N);
+nndb_probe = NNdb('Probe', p_db, [], false, p_lbl, Format.H_N);
+W = eye(nndb_gal.h * nndb_gal.w * nndb_gal.ch);
+accuracy = Util.test(W, nndb_gal, nndb_probe)
 
 %% LLE
 import nnf.alg.LLE;
