@@ -21,7 +21,7 @@ for i=1:numel(infos)
     name = infos(i).name;
     % Exclude these items in the current iteraing directory
     if (strcmp(name, '.') || strcmp(name, '..') || ...
-        name(1) == '.' || strcmp(name, '_other') || strcmp(name, '+nnf'))
+        name(1) == '.' || strcmp(name, '_other') || strcmp(name, '+nnf') || strcmp(name, '+civil'))
         continue;
     end
     
