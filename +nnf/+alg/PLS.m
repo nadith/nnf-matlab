@@ -15,8 +15,14 @@ classdef PLS
     	%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         % Public Interface
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        function [W_tr, W_tr_out] = l2(nndb_tr, nndb_tr_out, info)
-            % L2: leanrs the PLS subspace with l2-norm. 
+        function [W_X, W_Y] = l2(nndb_tr, nndb_tr_out, info)
+            % L2: leanrs the PLS subspace with l2-norm.
+            %   IMOPORTANT:
+            %       When (info.alg == 'PLS_BASES')
+            %       -----------------------------
+            %       COFx = W'*X;    => W_X' * X
+            %       COFy = Z\Y;     => W_Y \ Y  
+            %       Refer PLS_Bases.m (Author's Code)
             %
             % Parameters
             % ----------
@@ -54,10 +60,11 @@ classdef PLS
             import nnf.alg.PLS;
             
             % Set defaults for arguments
-            if (nargin < 2), info = []; end
+            if (nargin < 3), info = []; end
             
             % Set defaults for info fields, if the field does not exist
-            if (~isfield(info,'bases')); info.bases = 0; end;
+            if (~isfield(info,'alg')); info.alg = 'PLS_BASES'; end
+            if (~isfield(info,'bases')); info.bases = 0; end
             
             if (info.bases == 0)
                 % Since PLS always finds a space whose rank is lower to the lowest rank of provided
@@ -67,12 +74,27 @@ classdef PLS
                 info.bases = min(m_tr, m_tr_out);
             end
             
-            % Optimization 1
-            [W_tr, W_tr_out] = PLS_Bases(nndb_tr.features, nndb_tr_out.features, info.bases);
-            
-            
-            % Optimization 2
-            %[W_tr, W_tr_out] = PLS.optimize(nndb_tr.features, nndb_tr_out.features, info.bases);
+            if (strcmp(info.alg, 'PLS_BASES'))
+                % Optimization 1
+                [W_X, W_Y] = PLS_Bases(nndb_tr.features, nndb_tr_out.features, info.bases);
+                
+                % IMOPORTANT: Refer PLS_Bases.m (Author's Code)
+                % COFx = W'*X;    => W_X' * X
+                % COFy = Z\Y;     => W_Y \ Y           
+                
+            elseif (strcmp(info.alg, 'PLS_SVD'))
+                % Optimization 2
+                [W_X, W_Y] = PLS.optimize(nndb_tr.features, nndb_tr_out.features, info.bases);
+                
+            elseif (strcmp(info.alg, 'PLS_NIPALS'))
+                % Optimization 3
+                [W_X, W_Y] = PLS.plsnipals(nndb_tr.features', nndb_tr_out.features', info.bases);
+                
+            elseif (strcmp(info.alg, 'PLS_MATLAB'))
+                % Optimization 4 (TODO: CHECK, RECOGNITION FAILS) - MATLAB plsregress
+                [W_X, W_Y] = plsregress(nndb_tr.features', nndb_tr_out.features', info.bases);
+                
+            end
         end
                
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -111,14 +133,39 @@ classdef PLS
             % Decomposition of cross co-variance matrices.           
             [~, ~, Q] = svd((X*Y')'*(X*Y'));
             [~, ~, P] = svd((Y*X')'*(Y*X'));
-            Q = Q';
-            Q = Q(1:bases,:);
-            P = P';
-            P = P(1:bases,:);
+            Q = Q(:,1:bases);
+            P = P(:,1:bases);
+        end
+        
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        function [P, Q] = plsnipals(X,Y, bases)
+            % Berny's implementation
+            %+++ The NIPALS algorithm
+            % REF: https://www.ibm.com/support/knowledgecenter/en/SSLVMB_21.0.0/com.ibm.spss.statistics.help/alg_pls_estimation_nipals.htm
+            for i=1:bases
+                error = 1;
+                u = Y(:,1);
+                niter = 0;
+                while (error>1e-8 && niter<10000)  % for convergence test
+                    p = X'*u/ norm(X'*u);
+                    t = X*p;
+                    q = Y'*t/norm(Y'*t);
+                    u1= Y*q;
+                    error = norm(u1-u)/norm(u);
+                    u = u1;
+                    niter = niter + 1;
+                end
+                X = X - t*p';
+                Y = Y - u1*q'; % t * p'
+                
+                %+++ store
+                P(:,i) = p;
+                Q(:,i) = q;                
+            end
         end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     end
-    
+                
 end
 

@@ -325,7 +325,9 @@ classdef (Abstract) DAERegModel < handle
                     [self.tr_indices, self.val_indices, self.te_indices] = dividerand(n, 85/100, 0, 15/100);
                 end
                 
-            else  
+            else
+                self.split_val_data = true; % Force NN to use following datasplit. Ref: train_and_eval(...)
+                
                 % Load explicit indices
                 self.tr_indices = indices{1};
                 self.val_indices = indices{2};
@@ -625,6 +627,11 @@ classdef (Abstract) DAERegModel < handle
                     aecfg = nncfg.aes(i);
                     aecfg.validate();
 
+                    if (isfield(nncfg, 'stop_train') && nncfg.stop_train(net_idx))
+                        self.on_train_end_(pp_infos, nncfg, pretr_nets, [], [], tr_stats, [], [], [], []);
+                        return;
+                    end
+                    
                     if (isfield(nncfg, 'load_aes') && nncfg.load_aes(i))
                         if (isempty(loaded)); error("Please specify 'nncfg.load_from'"); end
                         autoenc = loaded.pretr_nets{net_idx};
@@ -688,6 +695,11 @@ classdef (Abstract) DAERegModel < handle
                     % Normalizing output for relationship learning AE.
                     % netcfg.outProcessFcns{1} = 'mapminmax';
 
+                    if (isfield(nncfg, 'stop_train') && nncfg.stop_train(net_idx))
+                        self.on_train_end_(pp_infos, nncfg, pretr_nets, [], [], tr_stats, [], [], [], []);
+                        return;
+                    end
+                    
                     if (isfield(nncfg, 'load_nets') && nncfg.load_nets(i))                        
                        if (isempty(loaded)); error("Please specify 'nncfg.load_from'"); end
                        autoenc = loaded.pretr_nets{net_idx};
@@ -729,6 +741,11 @@ classdef (Abstract) DAERegModel < handle
                     XX_te  = encode(autoenc, XX_te);
                     XX_val = encode(autoenc, XX_val);
                 end
+            end            
+            
+            if (isfield(nncfg, 'stop_train') && nncfg.stop_train(net_idx))
+                self.on_train_end_(pp_infos, nncfg, pretr_nets, [], [], tr_stats, [], [], [], []);
+                return;
             end
 
             % Sample Code to extract features from `net`

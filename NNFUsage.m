@@ -16,6 +16,14 @@ import nnf.utl.illumination_norm;
 % Create a NNdb database with AR database (12 images per identity)
 nndb = NNdb('original', imdb_ar, 12, true);
 
+% % Augmenting dataset
+% import nnf.utl.ImageAugment;
+% info.center_cls_mean = true;
+% info.samples_per_class = 2;
+% info.noise_ratio = 0.2;
+% nndb = ImageAugment.gauss_data_gen(nndb, info, true);
+% nndb.show(10, 14);
+
 % Basic Selection
 sel = Selection();
 sel.tr_col_indices        = [1:8];              % randperm(12, 8); % Random choice
@@ -35,13 +43,13 @@ figure, nndb_tr.show_ws(10, 8) % with whitespaces
 import nnf.alg.PCA;
 info = [];
 W = PCA.l2(nndb_tr);
-accurary = Util.test(W, nndb_tr, nndb_te)
+accuracy = Util.test(W, nndb_tr, nndb_te)
 
 % PCA_MCC
 import nnf.alg.PCA;
 info = [];
 W = PCA.mcc(nndb_tr);
-accurary = Util.test(W, nndb_tr, nndb_te)
+accuracy = Util.test(W, nndb_tr, nndb_te)
 
 % PCA-MCC (old implementation) - deprecated
 % features_tr = reshape(nndb_tr.db, nndb_tr.h * nndb_tr.w * nndb_tr.ch, nndb_tr.n);
@@ -62,32 +70,32 @@ info = [];
 for i=[100:10:360]
     info.t = i;
     [W, ki] = KPCA.l2(nndb_tr, info);
-    accurary = Util.test(W, nndb_tr, nndb_te, ki)
+    accuracy = Util.test(W, nndb_tr, nndb_te, ki)
 end
 
 %% LDA_L2 Fisher Faces
 import nnf.alg.LDA;
 info = [];
 W = LDA.fl2(nndb_tr);
-accurary = Util.test(W, nndb_tr, nndb_te)
+accuracy = Util.test(W, nndb_tr, nndb_te)
 
 % Direct LDA
 import nnf.alg.LDA;
 info = [];
 [W, info] = LDA.dl2(nndb_tr, info);
-accurary = Util.test(W, nndb_tr, nndb_te)
+accuracy = Util.test(W, nndb_tr, nndb_te)
 
 % LDA_L2 Regularized
 import nnf.alg.LDA;
 info = [];
 W = LDA.l2(nndb_tr);
-accurary = Util.test(W, nndb_tr, nndb_te)
+accuracy = Util.test(W, nndb_tr, nndb_te)
 
 % R1/L1 LDA
 import nnf.alg.LDA;
 info = [];
 W = LDA.r1(nndb_tr);
-accurary = Util.test(W, nndb_tr, nndb_te)
+accuracy = Util.test(W, nndb_tr, nndb_te)
 
 % R1/L1 LDA (old implementation) - deprecated
 % features_tr = reshape(nndb_tr.db, nndb_tr.h * nndb_tr.w * nndb_tr.ch, nndb_tr.n);
@@ -100,7 +108,7 @@ info = [];
 for i=[6000:10:15000]
     info.t = i;
     [W, ki] = KDA.l2(nndb_tr, info);
-    accurary = Util.test(W, nndb_tr, nndb_te, ki)
+    accuracy = Util.test(W, nndb_tr, nndb_te, ki)
 end
 
 % KDA_L2 Regularized
@@ -110,7 +118,7 @@ info.Regu = true;
 for i=[100:10:360]
     info.t = i;
     [W, ki] = KDA.l2(nndb_tr, info);
-    accurary = Util.test(W, nndb_tr, nndb_te, ki)
+    accuracy = Util.test(W, nndb_tr, nndb_te, ki)
 end
 
 %% SRC
@@ -149,15 +157,33 @@ import nnf.alg.Util;
 [accuracy2] = Util.src_test(nndb_tr, nndb_te, sinfo);
 assert(accuracy == accuracy2);
 
-%% High Resolution Database, PLS
-sel.scale                 = 1;
-[nndb_tr0, ~, ~, ~]       = DbSlice.slice(nndb, sel); 
+%% Partial Least Squares (PLS)
+sel.tr_col_indices          = [1:4];
+sel.te_col_indices          = [5 6];
+
+% Low Resolution database
+sel.scale                   = 0.25;
+[nndb_tr_lr, ~, nndb_te_lr, ~, ~, ~, ~]= DbSlice.slice(nndb, sel); 
+
+% High Resolution Database
+sel.scale                   = 0.5;
+[nndb_tr_hr, ~, ~, ~, ~, ~, ~]= DbSlice.slice(nndb, sel); 
 
 import nnf.alg.PLS;
 info = [];
 info.bases = 100;
-[W_HR, W_LR] = PLS.l2(nndb_tr0, nndb_tr, info);
-accurary = Util.PLS_test(W_HR, nndb_tr0, W_LR, nndb_tr, nndb_te);
+info.bases = 0;
+[W_HR, W_LR] = PLS.l2(nndb_tr_hr, nndb_tr_lr, info);
+
+g_db = [W_HR' * nndb_tr_hr.features  W_LR' * nndb_tr_lr.features];
+g_lbl = [nndb_tr_hr.cls_lbl nndb_tr_lr.cls_lbl];
+p_db = W_LR' * nndb_te_lr.features;
+p_lbl = nndb_te_lr.cls_lbl;
+
+nndb_gal = NNdb('Gal', g_db, [], false, g_lbl, Format.H_N);
+nndb_probe = NNdb('Probe', p_db, [], false, p_lbl, Format.H_N);
+W = eye(nndb_gal.h * nndb_gal.w * nndb_gal.ch);
+accuracy = Util.test(W, nndb_gal, nndb_probe)
 
 %% LLE
 import nnf.alg.LLE;
@@ -184,15 +210,15 @@ sel.te_col_indices = [3 5 6 7 10 12];
 import nnf.alg.LDA;
 info = [];
 W = LDA.fl2(nndb_tr);
-accurary = Util.test(W, nndb_tr, nndb_te)
+accuracy = Util.test(W, nndb_tr, nndb_te)
 
 info.Regu = 1;
 W = LDA.l2(nndb_tr, info);
-accurary = Util.test(W, nndb_tr, nndb_te)
+accuracy = Util.test(W, nndb_tr, nndb_te)
 
 import nnf.alg.PCA;
 W = PCA.l2(nndb_tr);
-accurary = Util.test(W, nndb_tr, nndb_te)
+accuracy = Util.test(W, nndb_tr, nndb_te)
 
 
 %% TSNE
@@ -306,15 +332,15 @@ sel.te_col_indices = [3 5 6 7 10 12];
 import nnf.alg.LDA;
 info = [];
 W = LDA.fl2(nndb_tr);
-accurary = Util.test(W, nndb_tr, nndb_te)
+accuracy = Util.test(W, nndb_tr, nndb_te)
 
 info.Regu = 1;
 W = LDA.l2(nndb_tr, info);
-accurary = Util.test(W, nndb_tr, nndb_te)
+accuracy = Util.test(W, nndb_tr, nndb_te)
 
 import nnf.alg.PCA;
 W = PCA.l2(nndb_tr);
-accurary = Util.test(W, nndb_tr, nndb_te)
+accuracy = Util.test(W, nndb_tr, nndb_te)
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Example 4: Perform TSNE, then classfication algorithm for recognition.
@@ -339,15 +365,15 @@ sel.te_col_indices        = [3 5 6 7 10 12];
 import nnf.alg.LDA;
 info = [];
 W = LDA.l2(nndb_tr);
-accurary = Util.test(W, nndb_tr, nndb_te)
+accuracy = Util.test(W, nndb_tr, nndb_te)
 
 info.Regu = 1;
 W = LDA.l2(nndb_tr, info);
-accurary = Util.test(W, nndb_tr, nndb_te)
+accuracy = Util.test(W, nndb_tr, nndb_te)
 
 import nnf.alg.PCA;
 W = PCA.l2(nndb_tr);
-accurary = Util.test(W, nndb_tr, nndb_te)
+accuracy = Util.test(W, nndb_tr, nndb_te)
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Example 5: Structured SRC (Ref: Robust face recognition via occlusion dictionary learning)

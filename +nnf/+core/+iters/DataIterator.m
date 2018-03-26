@@ -10,7 +10,8 @@ classdef DataIterator < handle
     %     Image data pre-processor for all iterators.
     % 
     % gen_next_ : `function`
-    %     Core iterator/generator that provide data.
+    %     Core iterator for non DskmanIterator(s) / Generator for DskmanIterator(s), 
+    %     that provide data.
     % 
     % sync_gen_next_ : :obj:`DirectoryIterator` or :obj:`NumpyArrayIterator`
     %     Core iterator that needs to be synced with `_gen_next`.
@@ -34,7 +35,7 @@ classdef DataIterator < handle
     % 
     % Notes
     % -----
-    % Disman data iterators are utilzing a generator function in _gen_next 
+    % Diskman data iterators are utilizing a generator function in _gen_next
     % while the `nnmodel` data iterators are utilizing an core iterator.
     %
     % Copyright 2015-2016 Nadith Pathirage, Curtin University (chathurdara@gmail.com).
@@ -70,7 +71,7 @@ classdef DataIterator < handle
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         % Public Interface
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        function self =  DataIterator(pp_params, fn_gen_coreiter, edataset, nb_class)
+        function self = DataIterator(pp_params, fn_gen_coreiter, edataset, nb_class)
             % Constructor of the abstract class :obj:`DataIterator`.
             % 
             % Parameters
@@ -94,9 +95,9 @@ classdef DataIterator < handle
             % Initialize the image data pre-processor with pre-processing params
             % Used by Diskman data iterators and `nnmodel` data iterators
             self.imdata_pp_ = ImageDataPreProcessor(pp_params, fn_gen_coreiter);
-
-            % Core iterator or generator (initilaized in init())
-            % Diskman data iterators are utilzing a generator function in _gen_next
+   
+            % Core iterator or generator (initialized in init_ex())
+            % Diskman data iterators are utilizing a generator function with yield in _gen_next
             % while the `nnmodel` data iterators are utilizing an core iterator.
             self.gen_next_ = [];
 
@@ -127,7 +128,7 @@ classdef DataIterator < handle
             % Parameters
             % ----------
             % gen_next_ : `function`
-            %     Core iterator/generator that provide data.
+            %     Core iterator/generator that provides data.
             %
 
             % Set default values
@@ -163,6 +164,18 @@ classdef DataIterator < handle
             self.gen_next_.shuffle = shuffle;
             success = true;
         end
+        
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        function success = set_batch_size(self, batch_size)
+            % Set the batch size.
+
+            % This method is only supported by the core iterator
+            if (isempty(self.gen_next_)); success = false; return; end
+
+
+            self.gen_next_.batch_size = batch_size;
+            success = true;
+        end
 
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         function success = sync(self, gen_next)
@@ -193,10 +206,23 @@ classdef DataIterator < handle
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         function success = reset(self)
-            % Resets the iterator to the begining.
+            % Reset the iterator to the begining.
             if (isempty(self.gen_next_)); success = false; return; end
             self.gen_next_.reset();
             success = true;
+        end
+        
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        function release(self)
+            % Release internal resources used by the iterator.
+            self.imdata_pp_ = [];
+            self.gen_next_ = [];
+            self.sync_gen_next_ = [];
+            self.params_ = [];
+            delete(self.pp_params_);
+            self.fn_gen_coreiter_ = [];
+            self.edataset = [];
+            self.nb_class_ = [];
         end
                 
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -212,25 +238,6 @@ classdef DataIterator < handle
     
     methods (Abstract, Access = public)
         [cimg, frecord] = clone(self); % Create a copy of this object.      
-    end
-    
-    methods (Access = protected)
-        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        % Protected Interface
-        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        function release_(self)
-            % Release internal resources used by the iterator.
-            self.imdata_pp_ = [];
-            self.gen_next_ = [];
-            self.sync_gen_next_ = [];
-            self.params_ = [];
-            delete(self.pp_params_);
-            self.fn_gen_coreiter_ = [];
-            self.edataset = [];
-            self.nb_class_ = [];
-        end
-
-        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     end
      
     methods

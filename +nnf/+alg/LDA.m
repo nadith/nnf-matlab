@@ -1,5 +1,5 @@
 classdef LDA < nnf.alg.MCC
-    %LDA: Linear Discriminant Analysis algorithm and varients.
+    % LDA: Linear Discriminant Analysis algorithm and varients.
     %   Refer method specific help for more details. 
     %
     %   Currently Support:
@@ -33,7 +33,6 @@ classdef LDA < nnf.alg.MCC
             %     -----------------------------------
             %     PCARatio = 1; % The percentage of principal component preserved via PCA (1 = 100%) 
             %     info.visualize = false; % Visualize fisher faces  
-            %          
             %
             % Returns
             % -------
@@ -223,6 +222,149 @@ classdef LDA < nnf.alg.MCC
             % D2_L2: performs 2D-LDA.
             % TODO: Implement
             
+        end
+        
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        function W = mcc2(nndb, info)
+            % Imports
+            import nnf.alg.MCC;
+            
+            sigma = 0.3;            
+            cls_n = nndb.cls_n;
+            features = nndb.features;
+            dim = size(features, 1);
+            
+            % Class means
+            CLS_M = zeros(dim, cls_n);
+            
+            % Calculate Sw           
+            Sw = zeros(size(features));
+            for i=1:cls_n
+                n_per_class = uint32(nndb.n_per_class(i));
+                offset = nndb.cls_st(i);
+                
+                % features belong to class i
+                range = offset:offset + n_per_class - 1;
+                X = features(:, range);
+                CLS_M(:, i) = mean(X, 2);
+                Sw(:, range) = bsxfun(@minus, X, CLS_M(:, i));
+            end
+            Sw = Sw * Sw';
+                        
+            % Global mean diff
+            m = mean(features, 2);
+            MD = bsxfun(@minus, CLS_M, m);         
+            
+            converge = false;
+            tolerance = 0.01;
+            
+            W = orth(rand(dim, 30));
+            %W = rand(dim, 99);
+            prev_W_grad = 0; % norm(W, 2);
+            lr = 0.00000001;
+            lamda = 1;
+            
+            while (~converge)                                                
+                x = (diag(MD' * MD) - diag((W' * MD)' * (W' * MD)));
+                x = x ./ (sigma^2);
+                g = MCC.gauss(x);
+                
+                cost = sum(g) - lamda * sum(diag(W' * Sw * W - eye(size(W, 2))));
+                
+                W_grad = (MD * diag(g) * MD' * W  / (sigma^2)) - 2 * lamda * Sw * W;
+                W = W - lr * W_grad;
+                
+                % Normalize since W'W = I
+                W = normc(W);
+                
+                W_grad = norm(W_grad, 2);
+                norm_diff = abs(prev_W_grad - W_grad);
+                disp(['C:' num2str(cost) ' W:' num2str(size(W, 2)) ' W_grad:' num2str(W_grad) ' Diff:' num2str(norm_diff)]);
+                
+                if (norm_diff <= tolerance)
+                    converge = true;
+                end
+                prev_W_grad = W_grad;                                
+            end
+        end
+        
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        function W = mcc(nndb, info)
+            % Imports
+            import nnf.alg.MCC;
+            
+            sigma = 1;            
+            cls_n = nndb.cls_n;
+            features = nndb.features;
+            dim = size(features, 1);
+            
+            % Class means
+            CLS_M = zeros(dim, cls_n);
+            
+            % Calculate Sw           
+            Sw = zeros(size(features));
+            for i=1:cls_n
+                n_per_class = uint32(nndb.n_per_class(i));
+                offset = nndb.cls_st(i);
+                
+                % features belong to class i
+                range = offset:offset + n_per_class - 1;
+                X = features(:, range);
+                CLS_M(:, i) = mean(X, 2);
+                Sw(:, range) = bsxfun(@minus, X, CLS_M(:, i));
+            end
+            Sw = Sw * Sw';
+                        
+            % Global mean diff
+            m = mean(features, 2);
+            MD = bsxfun(@minus, CLS_M, m);         
+            
+            converge = false;
+            tolerance = 0;
+            
+            W = orth(rand(dim, dim-1));
+            %W = [0.7071; 0.7071];
+            %W = rand(dim, 99);
+            prev_W_grad = 0; % norm(W, 2);
+            
+            while (~converge)
+                                                
+                x = (diag(MD' * MD) - diag((W' * MD)' * (W' * MD)));
+                x = x ./ (sigma^2);
+                P = -diag(MCC.gauss(x));
+                
+                Sb = MD * P * MD';                
+                [W, D0] = eig(-Sb, Sw); %, 'qz');
+                     
+                [DS, I] = sort(diag(D0));
+                W = W(:, I);
+                
+                W = W(:, DS ~= -Inf);
+                DS = DS(DS ~= -Inf);
+                
+                W = W(:, DS ~= Inf);
+                DS = DS(DS ~= Inf);
+                
+                W = W(:, DS > 1e-7);
+                DS = DS(DS > 1e-7);
+                
+                % Stable eigen value decomposition
+                % [W, D0] = svd(X);
+                     
+                
+                % Normalize since W'W = I
+                W = normc(W);
+                
+                W_grad = (-Sb * W - Sw * W * DS);
+                W_grad = norm(W_grad, 2);
+                norm_diff = abs(prev_W_grad - W_grad);
+                disp(['W:' num2str(size(W, 2)) ' W_grad:' num2str(W_grad) ' Diff:' num2str(norm_diff)]);
+                
+                if (norm_diff <= tolerance)
+                    converge = true;
+                end
+                prev_W_grad = W_grad;                                
+            end
         end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

@@ -6,17 +6,20 @@ function [image_map] = immap( X, varargin )
     % X : array_like -uint8
     %     2D Data tensor that contains images.
     % 
-    %     Format for color/grey images: (H x W x CH x N).
+    %       Format for color/grey images: (H x W x CH x N).
     % 
     % rows : int
-    %     Number of rows in the grid.
+    %       Number of rows in the grid.
     % 
     % cols : int
-    %     Number of columns in the grid.
+    %       Number of columns in the grid.
     % 
-    % scale : int, optional
-    %     Scale factor. (Default value = [], no resize operation required).
-    % 
+    % scale : float or `array_like`, optional
+    %       Scale factor.
+    %       * float - Fraction of current size.
+    %       * tuple - Size of the output image.
+    %       (Default value = None).
+    %
     % offset : int, optional
     %     Offset to the first image (Default value = 1, start from 1).
     % 
@@ -170,6 +173,8 @@ function [image_map] = immap( X, varargin )
        
     % Fill the grid
     for i = 1:rows
+        im_index = i * cols;
+        
         for j = 1:cols
             im_index = (i-1) * cols + j;
             if (im_index > im_count); break; end;

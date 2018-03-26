@@ -30,27 +30,14 @@ classdef DbSlice
     % i.e
     % Pass a selection structure to split the nndb accordingly
     % [nndb_tr, ~, ~, ~, ~, ~, ~] = DbSlice.slice(nndb, sel);
-    
+    %
     % Copyright 2015-2016 Nadith Pathirage, Curtin University (chathurdara@gmail.com).    
     methods (Access = public, Static)
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         % Public Interface
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        function safe_slice(self, nndb, sel)
-            % Thread Safe
-            % Imports
-            import nnf.core.iters.memory.DskmanMemDataIterator;
-            DbSlice.slice(nndb, sel, DskmanMemDataIterator(nndb))
-        end
-        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    end
-        
-    methods (Access = public, Static)
-        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        % Public Interface
-        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         function [nndbs_tr, nndbs_val, nndbs_te, nndbs_tr_out, nndbs_val_out, nndbs_te_out, edatasets] = ...
-                                                                    slice(nndb, sel, data_generator, pp_param) 
+                                                                    slice(nndb, sel, data_generator, pp_param, savepath) 
             % SLICE: slices the database according to the selection structure.
             % IMPL_NOTES: The new db will contain img at consecutive locations for duplicate indices
             % i.e Tr:[1 2 3 1], DB:[1 1 2 3]
@@ -116,12 +103,17 @@ classdef DbSlice
                 isempty(sel.val_out_col_indices) && ...
                 isempty(sel.te_col_indices) && ...
                 isempty(sel.te_out_col_indices))
-                error('ARG_ERR: [tr|tr_out|val|val_out|te]_col_indices: mandatary field');
+                error('ARG_ERR: [tr|tr_out|val|val_out|te]_col_indices: mandatory field');
             end            
             if ((~isempty(sel.use_rgb) && sel.use_rgb) && ~isempty(sel.color_indices))
                 error('ARG_CONFLICT: sel.use_rgb, sel.color_indices');
             end                                              
 
+            % Set defaults
+            if (nargin < 5)
+                savepath = [];
+            end
+            
             % Set defaults for data generator   
             if (nargin < 3 || isempty(data_generator))
                 if (nargin < 4); pp_param = []; end
@@ -140,7 +132,7 @@ classdef DbSlice
             if (isempty(cls_range)); sel.class_range = 1:nndb.cls_n; end   
 
             % Initialize class ranges and column ranges
-            % DEPENDANCY -The order must be preserved as per the enum Dataset 
+            % DEPENDENCY -The order must be preserved as per the enum Dataset 
             % REF_ORDER: [TR=1, VAL=2, TE=3, TR_OUT=4, VAL_OUT=5]
             cls_ranges = {sel.class_range ... 
                             sel.val_class_range ...
@@ -184,27 +176,27 @@ classdef DbSlice
             end
 
             % Initialize the generator
-            data_generator.init(cls_ranges, col_ranges, true);       
+            data_generator.init_ex(cls_ranges, col_ranges, true);       
 
             % LIMITATION: PYTHON-MATLAB (no support for generators)
-            % [PERF] Iterate through the choset subset of the nndb database
+            % [PERF] Iterate through the chosen subset of the nndb database
             [cimg, ~, cls_idx, col_idx, datasets, stop] = data_generator.next();
             while (~stop)
 
                 % Perform pre-processing before patch division
-                % Peform image operations only if db format comply them
-                if (nndb.format == Format.H_W_CH_N || nndb.format == Format.N_H_W_CH)
+                % Perform image operations only if db_format comply them
+                if (nndb.db_format == Format.H_W_CH_N || nndb.db_format == Format.N_H_W_CH)
 
                     % For histogram equalizaion operation (cannonical image)
                     cann_cimg = [];
                     if (~isempty(sel.histmatch_col_index))
-                        [cann_cimg, ~] = data_generator.get_cimg_frecord_in_next(cls_idx, sel.histmatch_col_index);
+                        [cann_cimg, ~] = data_generator.get_cimg_frecord(cls_idx, sel.histmatch_col_index);
                         % Alternative:
                         % cls_st = nndb.cls_st(sel.histmatch_col_index)
                         % cann_cimg = nndb.get_data_at(cls_st)
                     end
 
-                    % Peform image preocessing
+                    % Perform image preocessing
                     cimg = DbSlice.preprocess_im_with_sel_(cimg, cann_cimg, sel, data_generator.get_im_ch_axis());
                 end
                 
@@ -226,10 +218,10 @@ classdef DbSlice
                         if (nnpatch.is_holistic)
                             % pass
                         % Extract the patch
-                        elseif (nndb.format == Format.H_W_CH_N || nndb.format == Format.N_H_W_CH)
+                        elseif (nndb.db_format == Format.H_W_CH_N || nndb.db_format == Format.N_H_W_CH)
                             pimg = cimg(y:y+h-1, x:x+w-1, :);
                         
-                        elseif (nndb.format == Format.H_N || nndb.format == Format.N_H)
+                        elseif (nndb.db_format == Format.H_N || nndb.db_format == Format.N_H)
                             % 1D axis is `h` if w > 1, otherwise 'w'
                              if (w > 1); pimg = cimg(x:x+w-1); else; pimg = cimg(y:y+h-1); end
                         end
@@ -249,7 +241,7 @@ classdef DbSlice
                         if (isempty(nndbs))
                             % Add an empty NNdb for all `nnpatch` on first edataset entry
                             for pi_tmp=1:patch_loop_max_n
-                                nndbs(end+1) = NNdb([Dataset.str(edataset) '_p' num2str(pi_tmp)], [], [], false, [], nndb.format);
+                                nndbs(end+1) = NNdb([Dataset.str(edataset) '_p' num2str(pi_tmp)], [], [], false, [], nndb.db_format);
                             end
 
                             % Update the dict_nndbs
@@ -321,7 +313,21 @@ classdef DbSlice
             end
 
             % Returns NNdb object instead of NNdb array (non patch requirement)
-            if (isempty(sel.nnpatches))      
+            if (isempty(sel.nnpatches)) 
+                
+                % Save the splits in the disk
+                if ~isempty(savepath)        
+                    [filepath, name, ~] = fileparts(savepath);
+                    datasets = Dataset.get_enum_list();
+                    for i=1:numel(datasets)
+                        dataset = datasets(i);                        
+                        tmp_nndb = DbSlice.p0_nndbs(dict_nndbs, uint32(dataset))
+                        if ~isempty(tmp_nndb)                            
+                            tmp_nndb.save(fullfile(filepath, name) + "_" + str.upper(str(dataset)) + ".mat");
+                        end
+                    end
+                end
+                
                 nndbs_tr = DbSlice.p0_nndbs_(dict_nndbs, uint32(Dataset.TR));
                 nndbs_val = DbSlice.p0_nndbs_(dict_nndbs, uint32(Dataset.VAL));
                 nndbs_te = DbSlice.p0_nndbs_(dict_nndbs, uint32(Dataset.TE));
@@ -331,6 +337,24 @@ classdef DbSlice
                 edatasets = [Dataset.TR Dataset.VAL Dataset.TE Dataset.TR_OUT Dataset.VAL_OUT Dataset.TE_OUT];
                 return;
             end  
+                        
+            % Save the splits in the disk
+            if ~isempty(savepath)
+                [filepath, name, ~] = fileparts(savepath);
+                datasets = Dataset.get_enum_list();
+                for i=1:numel(datasets)
+                    dataset = datasets(i); 
+                    tmp_nndbs = [];
+                    if ~isempty(dict_nndbs(uint32(dataset))); tmp_nndbs = dict_nndbs(uint32(dataset)); end                        
+                    if ~isempty(tmp_nndbs)
+                        nndb_count = numel(tmp_nndbs);
+                        for pi=1:nndb_count
+                            tmp_nndb = tmp_nndb(pi);
+                            tmp_nndb.save(fullfile(filepath, name) + "_" + str.upper(str(dataset)) + "_" + str(pi) + ".mat");
+                        end
+                    end                    
+                end
+            end
             
             nndbs_tr = dict_nndbs(uint32(Dataset.TR));
             nndbs_val = dict_nndbs(uint32(Dataset.VAL));
@@ -343,8 +367,28 @@ classdef DbSlice
    
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         function cimg = preprocess_im_with_sel_(cimg, cann_cimg, sel, ch_axis)
-            % Peform image preocessing.
-        
+            % Perform image preprocessing with compliance to selection object.
+            % 
+            % Parameters
+            % ----------
+            % cimg : ndarray -uint8
+            %     3D Data tensor to represent the color image.
+            % 
+            % cann_cimg : ndarray
+            %     Cannonical/Target image (corresponds to sel.tr_out_indices).
+            % 
+            % sel : :obj:`Selection`
+            %     Information to pre-process the dataset. (Ref: class documentation).
+            % 
+            % ch_axis : int
+            %     Color axis of the image.
+            % 
+            % Returns
+            % -------
+            % ndarray -uint8
+            %     Pre-processed image.
+            %
+            
             % Imports
             import nnf.db.DbSlice;
             import nnf.pp.im_pre_process;
@@ -378,39 +422,19 @@ classdef DbSlice
         end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        function examples(imdb_8)
-            %EXAMPLES: Extensive example set
-            %   Assume:
-            %   There are only 8 images per subject in the database. 
-            %   NNdb is in H x W x CH x N format. (image database)
-            %
-            
-            %%% Full set of options
-            % nndb = NNdb('original', imdb_8, 8, true);
-            % sel.tr_col_indices        = [1:3 7:8]; %[1 2 3 7 8]; 
-            % sel.tr_noise_rate         = [];
-            % sel.tr_occlusion_rate     = [];
-            % sel.tr_occlusion_type     = [];
-            % sel.tr_occlusion_offset   = [];
-            % sel.tr_out_col_indices    = [];
-            % sel.val_col_indices       = [];
-            % sel.val_out_col_indices   = [];
-            % sel.te_col_indices        = [4:6]; %[4 5 6]
-            % sel.te_out_col_indices    = [];
-            % sel.nnpatches             = [];
-            % sel.use_rgb               = false;
-            % sel.color_index           = [];                
-            % sel.use_real              = false;
-            % sel.scale                 = 0.5;
-            % sel.normalize             = false;
-            % sel.histeq                = true;
-            % sel.histmatch_col_index   = [];
-            % sel.class_range           = [1:36 61:76 78:100];
-            % sel.val_class_range       = [];
-            % sel.te_class_range        = [];
-            % %sel.pre_process_script   = @fn_custom_pprocess;
-            % sel.pre_process_script    = [];
-            % [nndb_tr, ~, nndb_te, ~, ~, ~, ~] = DbSlice.slice(nndb, sel); 
+        function examples(imdb, im_per_class)
+            % Extensive set of examples.
+            % 
+            % Parameters
+            % ----------
+            % imdb : 4D tensor -uint8
+            %     NNdb object that represents the dataset. Assume it contain only 8 images per subject.
+            % 
+            %     Format: (Samples x H x W x CH).
+            % 
+            % im_per_class : int
+            %     Image per class.
+
             
             % Imports
             import nnf.db.NNdb;
@@ -420,8 +444,8 @@ classdef DbSlice
             import nnf.db.Noise;
                         
             % 
-            % Select 1st 2nd 4th images of each identity for training.
-            nndb = NNdb('original', imdb_8, 8, true);
+            % Select 1st 2nd 4th images of each identity for training
+            nndb = NNdb('original', imdb, im_per_class, true);
             sel = Selection();
             sel.tr_col_indices = [1:2 4]; %[1 2 4]; 
             [nndb_tr, ~, ~, ~, ~, ~, ~] = DbSlice.slice(nndb, sel); % nndb_tr = DbSlice.slice(nndb, sel); 
@@ -430,7 +454,7 @@ classdef DbSlice
             %
             % Select 1st 2nd 4th images of each identity for training.
             % Divide into patches
-            nndb = NNdb('original', imdb_8, 8, true);
+            nndb = NNdb('original', imdb, im_per_class, true);
             sel = Selection();
             sel.tr_col_indices = [1:2 4]; %[1 2 4];             
             patch_gen = NNPatchGenerator(nndb.h, nndb.w, 33, 33, 33, 33);
@@ -448,9 +472,9 @@ classdef DbSlice
             
             
             % 
-            % Select 1st 2nd 4th images of each identity for training.
-            % Select 3rd 5th images of each identity for testing.
-            nndb = NNdb('original', imdb_8, 8, true);
+            % Select 1st 2nd 4th images of each identity for training
+            % Select 3rd 5th images of each identity for testing
+            nndb = NNdb('original', imdb, im_per_class, true);
             sel = Selection();
             sel.tr_col_indices = [1:2 4];   %[1 2 4]; 
             sel.te_col_indices = [3 5];     %[3 5]; 
@@ -458,9 +482,9 @@ classdef DbSlice
             
             
            	% 
-            % Select 1st 2nd 4th images of identities denoted by class_range for training.
-            % Select 3rd 5th images of identities denoted by class_range for testing.            
-            nndb = NNdb('original', imdb_8, 8, true);
+            % Select 1st 2nd 4th images of identities denoted by class_range for training
+            % Select 3rd 5th images of identities denoted by class_range for testing   
+            nndb = NNdb('original', imdb, im_per_class, true);
             sel = Selection();
             sel.tr_col_indices = [1:2 4];   %[1 2 4]; 
             sel.te_col_indices = [3 5];     %[3 5]; 
@@ -469,17 +493,17 @@ classdef DbSlice
             
             %
             % Select 1st and 2nd image from 1st class and 2nd, 3rd and 5th image from 2nd class for training 
-            nndb = NNdb('original', imdb_8, 8, true);
+            nndb = NNdb('original', imdb, im_per_class, true);
             sel = Selection()
             sel.tr_col_indices      = {[1 2], [2 3 5]};
             sel.class_range         = [1:2];
             [nndb_tr, ~, ~, ~, ~, ~, ~] = DbSlice.slice(nndb, sel);
             
             % 
-            % Select 1st 2nd 4th images of identities denoted by class_range for training.
-            % Select 1st 2nd 4th images images of identities denoted by class_range for validation.   
-            % Select 3rd 5th images of identities denoted by class_range for testing. 
-            nndb = NNdb('original', imdb_8, 8, true);
+            % Select 1st 2nd 4th images of identities denoted by class_range for training
+            % Select 1st 2nd 4th images images of identities denoted by class_range for validation  
+            % Select 3rd 5th images of identities denoted by class_range for testing
+            nndb = NNdb('original', imdb, im_per_class, true);
             sel = Selection();
             sel.tr_col_indices = [1:2 4];   %[1 2 4]; 
             sel.val_col_indices= [1:2 4];   %[1 2 4]; 
@@ -489,10 +513,10 @@ classdef DbSlice
             
             
             % 
-            % Select 1st 2nd 4th images of identities denoted by class_range for training.
-            % Select 1st 2nd 4th images images of identities denoted by val_class_range for validation.   
-            % Select 3rd 5th images of identities denoted by te_class_range for testing. \
-            nndb = NNdb('original', imdb_8, 8, true);
+            % Select 1st 2nd 4th images of identities denoted by class_range for training
+            % Select 1st 2nd 4th images images of identities denoted by val_class_range for validation   
+            % Select 3rd 5th images of identities denoted by te_class_range for testing
+            nndb = NNdb('original', imdb, im_per_class, true);
             sel = Selection();
             sel.tr_col_indices = [1:2 4];   %[1 2 4]; 
             sel.val_col_indices= [1:2 4];   %[1 2 4]; 
@@ -504,12 +528,12 @@ classdef DbSlice
             
             
             % 
-            % Select 1st 2nd 4th images of identities denoted by class_range for training.
-            % Select 3rd 4th images of identities denoted by val_class_range for validation.
-            % Select 3rd 5th images of identities denoted by te_class_range for testing.
-            % Select 1st 1st 1st images of identities denoted by class_range for training target.
-            % Select 1st 1st images of identities denoted by val_class_range for validation target.
-            nndb = NNdb('original', imdb_8, 8, true);
+            % Select 1st 2nd 4th images of identities denoted by class_range for training
+            % Select 3rd 4th images of identities denoted by val_class_range for validation
+            % Select 3rd 5th images of identities denoted by te_class_range for testing
+            % Select 1st 1st 1st images of identities denoted by class_range for training target
+            % Select 1st 1st images of identities denoted by val_class_range for validation target
+            nndb = NNdb('original', imdb, im_per_class, true);
             sel = Selection();
             sel.tr_col_indices      = [1:2 4];
             sel.val_col_indices     = [3 4];
@@ -531,9 +555,9 @@ classdef DbSlice
 
             %
             % Using special enumeration values
-            % Training column will consists of first 60% of total columns avaiable
-            % Testing column will consists of first 40% of total columns avaiable
-            nndb = NNdb('original', imdb_8, 8, True);
+            % Training column will consists of first 60% of total columns available
+            % Testing column will consists of first 40% of total columns available
+            nndb = NNdb('original', imdb, im_per_class, True);
             sel = Selection();
             sel.tr_col_indices      = Select.PERCENT_60;
             sel.te_col_indices      = Select.PERCENT_40;
@@ -548,7 +572,7 @@ classdef DbSlice
             % Select 1st 2nd 4th images of each identity for training + 
             %               add various noise types @ random locations of varying degree.
             %               default noise type: random black and white dots.
-            nndb = NNdb('original', imdb_8, 8, true);
+            nndb = NNdb('original', imdb, im_per_class, true);
             sel = Selection();
             sel.tr_col_indices = [1:2 4];   %[1 2 4]; 
             sel.tr_noise_rate  = [0 0.5 0.2];       % percentage of corruption
@@ -560,7 +584,7 @@ classdef DbSlice
             % Select 1st 2nd 4th images of each identity for training + 
             %               add various occlusion types ('t':top, 'b':bottom, 'l':left, 'r':right, 'h':horizontal, 'v':vertical) of varying degree.
             %               default occlusion type: 'b'.
-            nndb = NNdb('original', imdb_8, 8, true);
+            nndb = NNdb('original', imdb, im_per_class, true);
             sel = Selection();
             sel.tr_col_indices = [1:2 4];
             sel.tr_occlusion_rate = [0 0.5 0.2];    % percentage of occlusion
@@ -575,7 +599,7 @@ classdef DbSlice
             % Select 1st 2nd 4th images of each identity for training + 
             %               add occlusions in the middle (horizontal/vertical).
             %               default occlusion type: 'b'.
-            nndb = NNdb('original', imdb_8, 8, true);
+            nndb = NNdb('original', imdb, im_per_class, true);
             sel = Selection();
             sel.tr_col_indices = [1:2 4];
             sel.tr_occlusion_rate = [0 0.5 0.2];        % percentage of occlusion
@@ -592,7 +616,7 @@ classdef DbSlice
             % Select 1st 2nd 4th images of each identity for training.
             % Select 1st 1st 1st image of each identity for corresponding training target.
             % Select 3rd 5th images of each identity for testing.
-            nndb = NNdb('original', imdb_8, 8, true);
+            nndb = NNdb('original', imdb, im_per_class, true);
             sel = Selection();
             sel.tr_col_indices = [1 2 4];       %[1 2 4]; 
             sel.tr_out_col_indices = [1 1 1];   %[1 1 1]; (Regression 1->1, 2->1, 4->1) 
@@ -602,7 +626,7 @@ classdef DbSlice
 
             %  
             % Resize images by 0.5 scale factor.
-            nndb = NNdb('original', imdb_8, 8, true);
+            nndb = NNdb('original', imdb, im_per_class, true);
             sel = Selection();
             sel.tr_col_indices = [1 2 4];   %[1 2 4]; 
             sel.te_col_indices = [3 5];     %[3 5]; 
@@ -612,8 +636,8 @@ classdef DbSlice
 
             %  
             % Use gray scale images.
-            % Perform histrogram equalization.
-            nndb = NNdb('original', imdb_8, 8, true);
+            % Perform histogram equalization.
+            nndb = NNdb('original', imdb, im_per_class, true);
             sel = Selection();
             sel.tr_col_indices = [1 2 4];   %[1 2 4]; 
             sel.te_col_indices = [3 5];     %[3 5]; 
@@ -624,9 +648,9 @@ classdef DbSlice
 
             %  
             % Use gray scale images.
-            % Perform histrogram match. This will be performed with the 1st image of each identity
+            % Perform histogram match. This will be performed with the 1st image of each identity
             % irrespective of the selection choice. (refer code for more details)
-            nndb = NNdb('original', imdb_8, 8, true);
+            nndb = NNdb('original', imdb, im_per_class, true);
             sel = Selection();
             sel.tr_col_indices = [1 2 4];   %[1 2 4]; 
             sel.te_col_indices = [3 5];     %[3 5]; 
@@ -637,7 +661,7 @@ classdef DbSlice
 
             %
             % If imdb_8 supports many color channels
-            nndb = NNdb('original', imdb_8, 8, true);
+            nndb = NNdb('original', imdb, im_per_class, true);
             sel = Selection();
             sel.tr_col_indices = [1 2 4];   %[1 2 4]; 
             sel.te_col_indices = [3 5];     %[3 5]; 
@@ -652,37 +676,64 @@ classdef DbSlice
     
     methods (Access = public, Static) % ?nnf.alg.PCA
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        function [filter] = get_occlusion_patch(h, w, dtype, occl_type, occl_rate, occl_offset)
+        function [oc_filter] = get_occlusion_patch(h, w, dtype, occl_type, occl_rate, occl_offset)
+            % Get a occlusion patch to place on top of an image.
+            % 
+            % Parameters
+            % ----------
+            % h : int
+            %     Height of the occlusion patch.
+            % 
+            % h : int
+            %     Width of the occlusion patch.
+            % 
+            % dtype : str or dtype
+            %     Typecode or data-type to which the array is cast.
+            % 
+            % occl_type : char
+            %     Occlusion type ('t':top, 'b':bottom, 'l':left, 'r':right).
+            % 
+            % occl_rate : double
+            %     Occlusion ratio.
+            % 
+            % occl_offset : double
+            %     Occlusion start offset (as a ratio) from top/bottom/left/right corner depending on `occl_type`.
+            % 
+            % Returns
+            % -------
+            % img : 2D tensor -uint8
+            %      Occlusion filter. (ones and zeros).
+            %
             
             % Set defaults for arguments
             if (nargin < 6); occl_offset = 0; end
             
-            filter = ones(h, w);
-            filter = cast(filter, dtype);
+            oc_filter = ones(h, w);
+            oc_filter = cast(oc_filter, dtype);
             
             if (isempty(occl_type) || occl_type == 'b')
                 sh = ceil(occl_rate * h);
                 en = floor((1-occl_offset) * h); 
                 st = en - sh + 1; if (st < 0); st = 1; end
-                filter(st:en, 1:w) = 0;
+                oc_filter(st:en, 1:w) = 0;
 
             elseif ((occl_type == 'r'))
                 sh = ceil(occl_rate * w);
                 en = floor((1-occl_offset) * w); 
                 st = en - sh + 1; if (st < 0); st = 1; end
-                filter(1:h, st:en) = 0;
+                oc_filter(1:h, st:en) = 0;
 
             elseif (occl_type == 't' || occl_type == 'v')
                 sh = floor(occl_rate * h);
                 st = floor(occl_offset * h) + 1; 
                 en = st + sh - 1; if (en > h); en = h; end
-                filter(st:en, 1:w) = 0;
+                oc_filter(st:en, 1:w) = 0;
 
             elseif (occl_type == 'l' || occl_type == 'h')
                 sh = floor(occl_rate * w);
                 st = floor(occl_offset * w) + 1; 
                 en = st + sh - 1; if (en > w); en = w; end
-                filter(1:h, st:en) = 0;              
+                oc_filter(1:h, st:en) = 0;              
             end
         end
         
@@ -704,7 +755,18 @@ classdef DbSlice
         function  [cls_ranges, col_ranges] = set_default_cls_range_(default_idx,  cls_ranges, col_ranges)
             % SET_DEFAULT_RANGE: Sets the value of the class range at default_idx 
             % to the class ranges at other indices [val|te|tr_out|val_out]
-            
+            %
+            % Parameters
+            % ----------
+            % default_idx : int
+            %     Index for list of class ranges. Corresponds to the enumeration `Dataset`.
+            % 
+            % cls_ranges : list of :obj:`list`
+            %     Class range for each dataset. Indexed by enumeration `Dataset`.
+            % 
+            % col_ranges : list of :obj:`list`
+            %     Column range for each dataset. Indexed by enumeration `Dataset`.
+            % 
             for rng_idx=1:numel(col_ranges)
                 if (~isempty(col_ranges{rng_idx}) && ...
                     isempty(cls_ranges{rng_idx}))
@@ -721,13 +783,13 @@ classdef DbSlice
             % 
             % Parameters
             % ----------
-            % col_ranges : describe
-            %     decribe.
+            % col_ranges : list of :obj:`list`
+            %       Column range for each dataset. Indexed by enumeration `Dataset`.            
             % 
             % Returns
             % -------
-            % dict_nndbs : describe
-            %
+            % dict_nndbs : Map of :obj:`NNdb`
+            %       Dictionary of nndbs. Keyed by enumeration `Dataset`.
 
             % Import
             import nnf.db.Dataset;
@@ -747,14 +809,20 @@ classdef DbSlice
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         function [img] = process_color_(img, sel) 
             % PROCESS_COLOR: performs color related functions.
-            %            
+            % 
+            % Parameters
+            % ----------
+            % img : ndarray -uint8
+            %     3D Data tensor. (format = H x W x CH)
+            % 
+            % sel : :obj:`Selection`
+            %     Selection object with the color processing fields.
+            %
             % Returns
             % -------
             % img : 3D tensor -uint8
             %      Color processed image.
             %
-
-
             if (isempty(img)); return; end        
             [~, ~, ch] = size(img);            
 
@@ -782,10 +850,36 @@ classdef DbSlice
                                                         noise_rate, occl_rate, occl_type, occl_offset) 
             % BUILD_NNDB_TR: builds the nndb training database.
             %          
+            % Parameters
+            % ----------
+            % nndbs : :obj:`List` of :obj:`NNdb`
+            %     List of nndbs each corresponds to patches.
+            % 
+            % pi : int
+            %     Patch index that used to index `nndbs`.
+            % 
+            % is_new_class : int
+            %     Whether it's a new class or not.
+            % 
+            % img : ndarray -uint8
+            %     3D Data tensor. (format = H x W x CH)
+            % 
+            % noise_rate : double
+            %     Noise ratio.
+            % 
+            % occl_rate : double
+            %     Occlusion ratio.
+            % 
+            % occl_type : char
+            %     Occlusion type ('t':top, 'b':bottom, 'l':left, 'r':right).
+            % 
+            % occl_offset : double
+            %     Occlusion start offset (as a ratio) from top/bottom/left/right corner depending on `occl_type`.
+            % 
             % Returns
             % -------
-            % nndbs : `array_like` -nnf.db.NNdb
-            %      Vector of patch databases.
+            % nndbs : Array of :obj:`NNdb`
+            %     NNdb objects for each patch.
             %  
             
             % Imports 
@@ -800,16 +894,16 @@ classdef DbSlice
                 
                 [h, w, ch] = size(img);
                 
-                % Adding different occlusions depending on the precentage
+                % Adding different occlusions depending on the percentage
                 if (~isempty(occl_rate))
-                    filter = DbSlice.get_occlusion_patch(h, w, class(img), occl_type, occl_rate, occl_offset);                    
+                    oc_filter = DbSlice.get_occlusion_patch(h, w, class(img), occl_type, occl_rate, occl_offset);                    
                     
                     % For grey scale
                     if (ch == 1)
-                        img = filter.*img;
+                        img = oc_filter.*img;
                     else
                         % For colored
-                        img = repmat(filter, 1, 1, ch).*img;
+                        img = repmat(oc_filter, 1, 1, ch).*img;
                     end
                     
                 % Add different noise depending on the type or rate
@@ -854,10 +948,18 @@ classdef DbSlice
         function img = rand_corrupt_(height, width) 
             % RAND_CORRUPT: corrupts the image with a (height, width) block.
             %            
+            % Parameters
+            % ----------
+            % height : int
+            %     Height of the corruption block.
+            % 
+            % width : int
+            %     Width of the corruption block.
+            % 
             % Returns
             % -------
-            % img : `array_like` -uint8
-            %      3D tensor to representing corrupted image.
+            % img : 3D tensor -uint8
+            %     3D-Data tensor that contains the corrupted image.
             %
             
             percentageWhite = 50; % Alter this value as desired
@@ -884,10 +986,24 @@ classdef DbSlice
         function nndbs = build_nndb_tr_out_(nndbs, pi, is_new_class, img)
             % BUILD_NNDB_TR_OUT: builds the nndb training target database.
             %            
+            % Parameters
+            % ----------
+            % nndbs : :obj:`List` of :obj:`NNdb`
+            %     List of nndbs each corresponds to patches.
+            % 
+            % pi : int
+            %     Patch index that used to index `nndbs`.
+            % 
+            % is_new_class : int
+            %     Whether it's a new class or not.
+            % 
+            % img : ndarray -uint8
+            %     3D Data tensor. (format = H x W x CH)
+            % 
             % Returns
             % -------
-            % nndbs : `array_like` -nnf.db.NNdb
-            %      Vector of patch databases.
+            % nndbs : Array of :obj:`NNdb`
+            %     NNdb objects for each patch.
             %
             
             % Imports 
@@ -905,10 +1021,24 @@ classdef DbSlice
         function nndbs = build_nndb_val_(nndbs, pi, is_new_class, img)
             % BUILD_NNDB_VAL: builds the nndb validation database.
             %            
+            % Parameters
+            % ----------
+            % nndbs : :obj:`List` of :obj:`NNdb`
+            %     List of nndbs each corresponds to patches.
+            % 
+            % pi : int
+            %     Patch index that used to index `nndbs`.
+            % 
+            % is_new_class : int
+            %     Whether it's a new class or not.
+            % 
+            % img : ndarray -uint8
+            %     3D Data tensor. (format = H x W x CH)
+            % 
             % Returns
             % -------
-            % nndbs : `array_like` -nnf.db.NNdb
-            %      Vector of patch databases.
+            % nndbs : Array of :obj:`NNdb`
+            %     NNdb objects for each patch.
             %
             
             % Imports 
@@ -926,10 +1056,24 @@ classdef DbSlice
         function nndbs = build_nndb_val_out_(nndbs, pi, is_new_class, img)
             % BUILD_NNDB_VAL_OUT: builds the nndb validation target database.
             %            
+            % Parameters
+            % ----------
+            % nndbs : :obj:`List` of :obj:`NNdb`
+            %     List of nndbs each corresponds to patches.
+            % 
+            % pi : int
+            %     Patch index that used to index `nndbs`.
+            % 
+            % is_new_class : int
+            %     Whether it's a new class or not.
+            % 
+            % img : ndarray -uint8
+            %     3D Data tensor. (format = H x W x CH)
+            % 
             % Returns
             % -------
-            % nndbs : `array_like` -nnf.db.NNdb
-            %      Vector of patch databases.
+            % nndbs : Array of :obj:`NNdb`
+            %     NNdb objects for each patch.
             %
             
             % Imports 
@@ -947,10 +1091,24 @@ classdef DbSlice
         function nndbs = build_nndb_te_(nndbs, pi, is_new_class, img)
             % BUILD_NNDB_TE: builds the testing database.
             %            
+            % Parameters
+            % ----------
+            % nndbs : :obj:`List` of :obj:`NNdb`
+            %     List of nndbs each corresponds to patches.
+            % 
+            % pi : int
+            %     Patch index that used to index `nndbs`.
+            % 
+            % is_new_class : int
+            %     Whether it's a new class or not.
+            % 
+            % img : ndarray -uint8
+            %     3D Data tensor. (format = H x W x CH)
+            % 
             % Returns
             % -------
-            % nndbs : `array_like` -nnf.db.NNdb
-            %      Vector of patch databases.
+            % nndbs : Array of :obj:`NNdb`
+            %     NNdb objects for each patch.
             %
             
             % Imports 
@@ -967,11 +1125,25 @@ classdef DbSlice
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         function nndbs = build_nndb_te_out_(nndbs, pi, is_new_class, img)
             % BUILD_NNDB_TE: builds the testing database.
-            %            
+            %
+            % Parameters
+            % ----------
+            % nndbs : :obj:`List` of :obj:`NNdb`
+            %     List of nndbs each corresponds to patches.
+            % 
+            % pi : int
+            %     Patch index that used to index `nndbs`.
+            % 
+            % is_new_class : int
+            %     Whether it's a new class or not.
+            % 
+            % img : ndarray -uint8
+            %     3D Data tensor. (format = H x W x CH)
+            % 
             % Returns
             % -------
-            % nndbs : `array_like` -nnf.db.NNdb
-            %      Vector of patch databases.
+            % nndbs : Array of :obj:`NNdb`
+            %     NNdb objects for each patch.
             %
             
             % Imports 

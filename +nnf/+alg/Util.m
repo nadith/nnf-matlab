@@ -81,7 +81,7 @@ classdef Util
             % Project the gallery/probe images
             gp_X =  [W1' * nndb_g1.features  W2' * nndb_g2.features]; % gallery images
             p_XT =  W2' * nndb_p.features; % probe images
-                   
+               
             % Extended gallery class labels and 'n'
             g_cls_lbl = [nndb_g1.cls_lbl nndb_g2.cls_lbl];
             g_n = nndb_g1.n + nndb_g2.n;
@@ -100,7 +100,7 @@ classdef Util
                 for tr_idx = 1:g_n 
                     % Calculate the norm according to the preference
                     if (info.g_norm)
-                        %TODO: Complete
+                        % TODO: Complete
                         gp_diff(tr_idx) = 1 - DCC_Gauss(ColumnNormSqrd(gp_X(:, tr_idx) - p_XT(:, te_idx))*sigma(i));
                     else
                         gp_diff(tr_idx) = col_norm_sqrd(gp_X(:, tr_idx) - p_XT(:, te_idx)); % Eucludien distance
@@ -122,10 +122,56 @@ classdef Util
             % Calculate accuracy
             accuracy = (sum(v) / nndb_p.n) * 100;
         end
+                                        
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        function [accuracy] = mcf_test(nndb, minfo)
+            % TODO: MCF_TEST: performs recognition with sparse coefficents and residual calculation.
+            
+            % Imports
+            import nnf.alg.*;
+            import nnf.db.Format;
+            import nnf.db.DbSlice; 
+            import nnf.db.Selection;
+            
+            % Errors
+            if (nargin < 2), error(['ARG: `info` missing']); end
+            if (~isfield(minfo, 'int')), error(['`info` internal field is missing']); end
+            if (~isfield(minfo, 'sel')), error(['Selection structure `info.sel` is not specified']); end
+            if (isempty(minfo.sel.tr_col_indices)), error(['Selection structure `tr_col_indices` is not specified']); end
+            if (isempty(minfo.sel.te_col_indices)), error(['Selection structure `te_col_indices` is not specified']); end            
+            sel = minfo.sel;                        
+            mcf_infos = minfo.int.mcf_infos;
+            
+            nndb_aug_gal = [];
+            nndb_aug_probe = [];
+            
+            for i=1:numel(mcf_infos)
+                mcf_info = mcf_infos{i};
+                sel.use_rgb               = false;              
+                sel.scale                 = mcf_info.scale;
+                sel.color_indices         = mcf_info.ch;
+                [nndb_tr, ~, nndb_te, ~, ~, ~, ~] = DbSlice.slice(nndb, sel); 
+                
+                nndb_tr.convert_format(Format.H_N);
+                nndb_te.convert_format(Format.H_N);
+                        
+                if (~isempty(nndb_aug_gal))
+                    assert(~isempty(nndb_aug_probe));
+                    nndb_aug_gal = nndb_aug_gal.concat_features(nndb_tr);
+                    nndb_aug_probe = nndb_aug_probe.concat_features(nndb_te);
+                else
+                    nndb_aug_gal = nndb_tr;
+                    nndb_aug_probe = nndb_te;
+                end
+            end
+            
+            % Perform classification
+            accuracy = MCF.calculate__(nndb_aug_gal, nndb_aug_probe, minfo);
+        end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         function [accuracy, dist] = src_test(nndb_A, nndb_Y, sinfo)
-            % LASS_RECOGN: performs recognition with sparse coefficents and residual calculation.
+            % SRC_TEST: performs recognition with sparse coefficents and residual calculation.
             %   min_i ||y - &_i(A * x)||_2^2
             %
             % Parameters

@@ -45,12 +45,12 @@ classdef MemDataIterator < nnf.core.iters.DataIterator
 
             self = self@nnf.core.iters.DataIterator(pp_params, fn_gen_coreiter, edataset, nb_class);
 
-            % NNdb database to create the iteartor
+            % NNdb database to create the iterator
             self.nndb = nndb;
         end
 
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%        
-        function settings = init(self, params, y, setting)
+        function settings = init_ex(self, params, y, setting)
             % Initialize the instance.
             % 
             % Parameters
@@ -67,7 +67,7 @@ classdef MemDataIterator < nnf.core.iters.DataIterator
             if (nargin < 3); y = []; end
             if (isempty(params)); params = Map(); end       
 
-            % Set db and _image_shape (important for convonets, and fit() method below)
+            % Set db and _image_shape (important for convolutional nets, and fit() method below)
             if (params.isKey('data_format'))
                 data_format = params.get('data_format');
             else
@@ -109,9 +109,9 @@ classdef MemDataIterator < nnf.core.iters.DataIterator
                 self.imdata_pp_.apply(setting);
             end
 
-            gen_next = self.imdata_pp_.flow(db, self.nndb.cls_lbl', self.nb_class, params);
+            gen_next = self.imdata_pp_.flow_ex(db, self.nndb.cls_lbl', self.nb_class, params);
             settings = self.imdata_pp_.settings;
-            init@nnf.core.iters.DataIterator(self, gen_next, params);
+            self.init(gen_next, params);
         end
 
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%        
@@ -122,7 +122,7 @@ classdef MemDataIterator < nnf.core.iters.DataIterator
             % Create a copy of this object.
             new_obj = MemDataIterator(self.edataset, self.nndb, self.nb_class, ...
                                         self.pp_params_, self.fn_gen_coreiter_);
-            new_obj.init(self.params_);
+            new_obj.init_ex(self.params_);
             new_obj.sync(self.sync_gen_next_);
         end
 
@@ -130,7 +130,7 @@ classdef MemDataIterator < nnf.core.iters.DataIterator
         function success = sync_generator(self, iter)
             % Sync the secondary iterator with this iterator.
             % 
-            % Sync the secondary core iterator with this core itarator internally.
+            % Sync the secondary core iterator with this core iterator internally.
             % Used when data needs to be generated with its matching target.
             % 
             % Parameters
@@ -146,21 +146,14 @@ classdef MemDataIterator < nnf.core.iters.DataIterator
             self.sync(iter.gen_next_);
             success = true;
         end
-
-        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-    end
-    
-
-    
-    methods (Access = protected)
-        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        % Protected Interface
+        
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         function release(self)
             % Release internal resources used by the iterator.
             self = release@nnf.core.iters.DataIterator();
             self.nndb = [];    
         end
+
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     end
-    
 end

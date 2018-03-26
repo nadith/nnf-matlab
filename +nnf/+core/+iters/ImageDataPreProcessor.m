@@ -89,7 +89,7 @@ classdef ImageDataPreProcessor < nnf.core.iters.ImageDataGenerator
             if (nargin < 4); rounds = 1; end
             if (nargin < 3); augment = false; end
             
-            fit@nnf.core.iters.ImageDataGenerator(self, X, augment, rounds, seed)
+            fit@nnf.core.iters.ImageDataGenerator(self, X, augment, rounds, seed);
             
             % Perform whitening/mapminmax/etc
             if (~isempty(self.pp_params_) && ...
@@ -100,7 +100,7 @@ classdef ImageDataPreProcessor < nnf.core.iters.ImageDataGenerator
         end
     
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        function core_iter = flow(self, X, y, nb_class, params)
+        function core_iter = flow_ex(self, X, y, nb_class, params)
             % Construct a core iterator instancef for in memory database traversal.
             % 
             % Parameters
@@ -110,7 +110,10 @@ classdef ImageDataPreProcessor < nnf.core.iters.ImageDataGenerator
             % 
             % y : `array_like`
             %     Vector indicating the class labels.
-            % 
+            %
+            % nb_class : int
+            %     Number of classes.
+            %
             % params : :obj:`dict`
             %     Core iterator parameters. 
             % 
@@ -146,7 +149,7 @@ classdef ImageDataPreProcessor < nnf.core.iters.ImageDataGenerator
         end     
                 
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%       
-        % function core_iter = flow_from_directory(self, frecords, nb_class, params)
+        % function core_iter = flow_from_directory_ex(self, frecords, nb_class, params)
         %     % Construct a core iterator instancef for disk database traversal.
         %     % 
         %     % Parameters

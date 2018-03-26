@@ -17,7 +17,7 @@ classdef NNdb < handle
 	properties (SetAccess = public)
         name;           % (s) Name of nndb object
         db;             % (M) Actual Database   
-        format;         % (s) Current Format of The Database
+        db_format;      % (s) Current Format of The Database
         
         h;              % (s) Height (Y dimension)
         w;              % (s) Width (X dimension)
@@ -41,16 +41,112 @@ classdef NNdb < handle
         zero_to_one;    % nndb converted to 0-1 range.
         im_ch_axis;     % Image channel index for an image.
     end
+    
+    methods (Access = public, Static)
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        % Public Interface
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        function nndb = load(filepath, db_name) 
+            % LOAD: Load images from a matfile.
+            % 
+            % Parameters
+            % ----------
+            % filepath : string
+            %     Path to the file.
+            % 
+            % Notes
+            % -----
+            % db_format of the datafile loaded must be Matlab default db_format = Format.H_W_CH_N
+            %
+
+            % Imports
+            import nnf.db.NNdb;
+            import nnf.db.Format;
+
+            % Set defaults for arguments
+            if (nargin < 2); db_name = 'DB'; end
+
+            imdb_obj = load(filepath);
+                   
+            if (mat.cls_lbl ~= [])
+                nndb = NNdb(db_name, imdb_obj.db, [], False, mat.cls_lbl);
+            else
+                nndb = NNdb(db_name, imdb_obj.db, imdb_obj.n_per_class, true);
+            end
+        end
+        
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        function nndb = load_from_dir(dirpath, db_name) 
+            % LOAD_FROM_DIR: Load images from a directory. 
+            % 
+            % Parameters
+            % ----------
+            % dirpath : string
+            %     Path to directory of images sorted in folder per each class.
+            % 
+            % db_name : string, optional
+            %     Name for the nndb object returned. (Default value = 'DB').
+            %
+
+            % Imports
+            import nnf.db.NNdb;
+            import nnf.db.Format;
+
+            % Set defaults for arguments
+            if (nargin < 2); db_name = 'DB'; end
+
+            % Init empty NNdb to collect images
+            nndb = NNdb(db_name, [], [], false, [], Format.H_W_CH_N);
+
+            cls_structs = dir(dirpath);
+            cls_structs = cls_structs(~ismember({cls_structs.name},{'.','..'})); % exclude '.' and '..'
+
+            % Sort the folder names (class names)
+            [~,ndx] = natsortfiles({cls_structs.name}); % indices of correct order
+            cls_structs = cls_structs(ndx);             % sort structure using indices
+
+            % Iterator
+            for cls_i = 1:length(cls_structs)
+
+                cls_name = cls_structs(cls_i).name;
+                cls_dir = fullfile(dirpath, cls_name);
+
+                % img_structs = dir (fullfile(ims_dir, '*.jpg')); % Only jpg files
+                img_structs = dir(cls_dir);
+                img_structs = img_structs(~ismember({img_structs.name},{'.','..'})); % exclude '.' and '..'
+
+                % Sort the image files (file names)
+                [~,ndx] = natsortfiles({img_structs.name}); % indices of correct order
+                img_structs = img_structs(ndx);             % sort structure using indices            
+
+                is_new_class = true;
+                for cls_img_i = 1 : length(img_structs)
+                    img_name = img_structs(cls_img_i).name;
+                    img = imread(fullfile(cls_dir, img_name));
+
+                    % Update NNdb
+                    nndb.add_data(img);
+                    nndb.update_attr(is_new_class);                        
+                    is_new_class = false;                       
+                end
+            end
+        end
+
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    end
 
     methods (Access = public)
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         % Public Interface
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%       
-        function self = NNdb(name, db, n_per_class, build_cls_lbl, cls_lbl, format) 
+        function self = NNdb(name, db, n_per_class, build_cls_lbl, cls_lbl, db_format) 
             % Constructs a nndb object.
             %
             % Parameters
             % ----------
+            % name : string
+            %     Name of the nndb object. 
+            % 
             % db : 4D tensor -uint8
             %     Data tensor that contains images.
             % 
@@ -63,7 +159,7 @@ classdef NNdb < handle
             % cls_lbl : vector -uint16 or scalar, optional
             %     Class index array. (Default value = []).
             % 
-            % format : nnf.db.Format, optinal
+            % db_format : nnf.db.Format, optinal
             %     Format of the database. (Default value = Format.H_W_CH_N, refer `nnf.db.Format`).
             %             
             
@@ -79,7 +175,7 @@ classdef NNdb < handle
             if (nargin < 3), n_per_class = []; end
             if (nargin < 4), build_cls_lbl = false; end
             if (nargin < 5), cls_lbl = []; end
-            if (nargin < 6), format = Format.H_W_CH_N; end     
+            if (nargin < 6), db_format = Format.H_W_CH_N; end     
             
             % Error handling for arguments
             if (isscalar(cls_lbl))
@@ -91,15 +187,15 @@ classdef NNdb < handle
                 self.n_per_class = [];
                 self.build_cls_lbl = build_cls_lbl;
                 self.cls_lbl = cls_lbl;
-                self.format = format;
+                self.db_format = db_format;
                 self.h = 0; self.w = 1; self.ch = 1; self.n = 0;                
                 self.cls_st = [];                
                 self.cls_n = 0;
                 return
             end
-                        
+                                    
             % Set values for instance variables
-            self.set_db(db, n_per_class, build_cls_lbl, cls_lbl, format);
+            self.set_db(db, n_per_class, build_cls_lbl, cls_lbl, db_format);
         end
       
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%                
@@ -116,68 +212,61 @@ classdef NNdb < handle
             import nnf.db.NNdb;
             import nnf.db.Format;
             
-            assert(self.h == nndb.h && self.w == nndb.w && self.ch == nndb.ch);
-            assert(self.cls_n == nndb.cls_n);
-            assert(strcmp(class(self.db), class(nndb.db)))
-            assert(self.format == nndb.format)
-        
-            if (self.format == Format.H_W_CH_N)
-                db = cast(zeros(self.h, self.w, self.ch, self.n + nndb.n), class(self.db));
-            elseif (self.format == Format.H_N)
-                db = cast(zeros(self.h * self.w * self.ch, self.n + nndb.n), class(self.db));
-            elseif (self.format == Format.N_H_W_CH)
-                db = cast(zeros(self.n + nndb.n, self.h, self.w, self.ch), class(self.db));
-            elseif (self.format == Format.N_H)
-                db = cast(zeros(self.n + nndb.n, self.h * self.w * self.ch), class(self.db));
+            if (~isempty(self.db) && ~isempty(nndb.db))            
+                assert(self.h == nndb.h && self.w == nndb.w && self.ch == nndb.ch);
+                assert(self.cls_n == nndb.cls_n);
+                assert(strcmp(class(self.db), class(nndb.db)))
+                assert(self.db_format == nndb.db_format)
             end
+        
+            nndb_merged = [];
+            db_format = self.db_format;
+            cls_n = self.cls_n;
             
-            cls_lbl = uint16(zeros(1, self.n + nndb.n));
-            en = 0;
-            for i=1:self.cls_n
-                % Fetch data from db1
-                cls_st = self.cls_st(i);
-                cls_end = cls_st + uint32(self.n_per_class(i)) - uint32(1);
-                
-                st = en + 1;
-                en = st + self.n_per_class(i) - 1;
-                cls_lbl(st:en) = i .* uint16(ones(1, self.n_per_class(i)));
-                
-                if (self.format == Format.H_W_CH_N)
-                    db(:, :, :, st:en) = self.db(:, :, :, cls_st:cls_end);
-                elseif (self.format == Format.H_N)
-                    db(:, st:en) = self.db(:, cls_st:cls_end);
-                elseif (self.format == Format.N_H_W_CH)
-                    db(st:en, :, :, :) = self.db(cls_st:cls_end, :, :, :);
-                elseif (self.format == Format.N_H)
-                    db(st:en, :) = self.db(cls_st:cls_end, :);
-                end            
-                
-                % Fetch data from db2
-                cls_st = nndb.cls_st(i);
-                cls_end = cls_st + uint32(nndb.n_per_class(i)) - uint32(1);
-                
-                st = en + 1;
-                en = st + nndb.n_per_class(i) - 1;
-                cls_lbl(st:en) = i .* uint16(ones(1, nndb.n_per_class(i)));
-                
-                if (self.format == Format.H_W_CH_N)
-                    db(:, :, :, st:en) = nndb.db(:, :, :, cls_st:cls_end);
-                elseif (self.format == Format.H_N)
-                    db(:, st:en) = nndb.db(:, cls_st:cls_end);
-                elseif (self.format == Format.N_H_W_CH)
-                    db(st:en, :, :, :) = nndb.db(cls_st:cls_end, :, :, :);
-                elseif (self.format == Format.N_H)
-                    db(st:en, :) = nndb.db(cls_st:cls_end, :);
+            if (~isempty(self.db))
+                if (isempty(nndb.db))
+                    nndb_merged = self.clone('merged');
                 end
             end
-                        
-            nndb = NNdb('merged', db, [], false, cls_lbl, self.format);            
+
+            if (~isempty(nndb.db))
+                if (isempty(self.db))
+                    nndb_merged = nndb.clone('merged');
+                end
+            end
+            
+            if (isempty(self.db) && isempty(nndb.db))
+                 nndb_merged = self.clone('merged');
+            end
+            
+            if (isempty(nndb_merged))
+                nndb_merged = NNdb('merged', [], [], false, [], db_format);
+                
+                for i=1:cls_n
+
+                    % Fetch data from db1
+                    cls_st = self.cls_st(i);
+                    cls_end = cls_st + uint32(self.n_per_class(i)) - uint32(1); 
+                    nndb_merged.add_data(self.get_data_at(cls_st:cls_end));
+
+                    % Fetch data from db2
+                    cls_st = nndb.cls_st(i);
+                    cls_end = cls_st + uint32(nndb.n_per_class(i)) - uint32(1);
+                    nndb_merged.add_data(nndb.get_data_at(cls_st:cls_end));
+
+                    % Update related paramters after adding data in the above step
+                    nndb_merged.update_attr(true, self.n_per_class(i) + nndb.n_per_class(i));
+                end
+            end
+            
+            nndb = nndb_merged;
         end
-        
+                
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         function nndb = concat_features(self, nndb) 
-            % AUGMENT_FEATURES: augment `nndb` instance with `self` instance.
-            %   Both `nndb` and self instances must be in the format Format.H_N or Format.N_H (2D databases)
+            % CONCAT_FEATURES: Concat `nndb` instance features with `self` instance features.
+            %   Both `nndb` and self instances must be in the db_format Format.H_N 
+            %   or Format.N_H (2D databases)
             % 
             % Parameters
             % ----------
@@ -193,28 +282,48 @@ classdef NNdb < handle
             assert(isequal(self.n_per_class, nndb.n_per_class));
             assert(self.cls_n == nndb.cls_n);
             assert(strcmp(class(self.db), class(nndb.db)))
-            assert(self.format == nndb.format)
-            assert(self.format == Format.H_N || self.format == Format.N_H);        
+            assert(self.db_format == nndb.db_format)
+            assert(self.db_format == Format.H_N || self.db_format == Format.N_H);        
                         
-            if (self.format == Format.H_N)
+            if (self.db_format == Format.H_N)
                 db = [self.db; nndb.db];
             
-            elseif (self.format == Format.N_H)                
+            elseif (self.db_format == Format.N_H)                
                 db = [self.db nndb.db];
             end
             
-            nndb = NNdb('features_augmented', db, self.n_per_class, true, [], self.format);
+            nndb = NNdb('features_augmented', db, self.n_per_class, true, [], self.db_format);
         end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        function self = convert_format(self, format, h, w, ch) 
-            % CONVERT_FORMAT: Convert the format of this `nndb` object to target format.
+        function [self] = fliplr(self)
+            % FLIPLR: Flip the image order in each class of this `nndb` object.            
+            % 
+            
+            dtype = class(self.db);
+            features = self.features;
+            self.db = [];
+            for i=1:self.cls_n
+                cls_st = self.cls_st(i);
+                cls_end = cls_st + uint32(self.n_per_class(i)) - uint32(1);
+                             
+                tmp = features(:, cls_st:cls_end);
+                tmp = fliplr(tmp);
+                        
+                % Add data according to the db_format (dynamic allocation)
+                self.add_data(self.features_to_data(tmp, self.h, self.w, self.ch, dtype));                  
+            end
+        end
+        
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        function self = convert_format(self, db_format, h, w, ch) 
+            % CONVERT_FORMAT: Convert the db_format of this `nndb` object to target db_format.
             %   h, w, ch are conditionally optional, used only when converting 2D nndb to 4D nndb
             %   formats.            
             %
             % Parameters
             % ----------
-            % format : nnf.db.Format
+            % db_format : nnf.db.Format
             %     Target format of the database.
             % 
             % h : int, optional under conditions
@@ -233,51 +342,51 @@ classdef NNdb < handle
             % Fetch datatype
             dtype = class(self.db);
             
-            if (self.format == Format.H_W_CH_N || self.format == Format.N_H_W_CH)
-                if (format == Format.H_N)
+            if (self.db_format == Format.H_W_CH_N || self.db_format == Format.N_H_W_CH)
+                if (db_format == Format.H_N)
                     self.db = cast(self.features, dtype);
                     self.h = size(self.db, 1);
                     self.w = 1;
                     self.ch = 1;
                     
-                elseif (format == Format.N_H)
+                elseif (db_format == Format.N_H)
                     self.db = cast(self.features', dtype);
                     self.h = size(self.db, 2);
                     self.w = 1;
                     self.ch = 1;
                     
-                elseif (format == Format.H_W_CH_N)
+                elseif (db_format == Format.H_W_CH_N)
                    self.db = self.db_matlab;                
                 
-                elseif (format == Format.N_H_W_CH)
+                elseif (db_format == Format.N_H_W_CH)
                     self.db = self.db_scipy;
                 end
                 
-                self.format = format;
+                self.db_format = db_format;
                 
-            elseif (self.format == Format.H_N || self.format == Format.N_H)                
+            elseif (self.db_format == Format.H_N || self.db_format == Format.N_H)                
                 
-                if (format == Format.H_W_CH_N)
+                if (db_format == Format.H_W_CH_N)
                     self.db = reshape(self.db_matlab, h, w, ch, self.n);
                     self.h = h;
                     self.w = w;
                     self.ch = ch;
                 
-                elseif (format == Format.N_H_W_CH)
+                elseif (db_format == Format.N_H_W_CH)
                     self.db = reshape(self.db_matlab, self.n, h, w, ch);
                     self.h = h;
                     self.w = w;
                     self.ch = ch;
                     
-                elseif (format == Format.H_N)
+                elseif (db_format == Format.H_N)
                     self.db = self.db_matlab;
                     
-                elseif (format == Format.N_H)
+                elseif (db_format == Format.N_H)
                     self.db = self.db_scipy;
                     
                 end
                 
-                self.format = format;
+                self.db_format = db_format;
             end
         end
                 
@@ -300,7 +409,7 @@ classdef NNdb < handle
             % --------
             % Using this method to update the attibutes of nndb dynamically.
             %
-            % >> nndb = NNdb("EMPTY_NNDB", [], [], false, [], format=Format.H_W_CH_N)
+            % >> nndb = NNdb("EMPTY_NNDB", [], [], false, [], db_format=Format.H_W_CH_N)
             % >> data = rand(30, 30, 1, 100)   # data tensor for each class
             % >> nndb.add_data(data)
             % >> nndb.update_attr(true, 100)
@@ -353,14 +462,14 @@ classdef NNdb < handle
             % Error handling for arguments
             assert(isempty(find(si > self.n)));
                         
-            % Get data according to the format
-            if (self.format == Format.H_W_CH_N)
+            % Get data according to the db_format
+            if (self.db_format == Format.H_W_CH_N)
                 data = self.db(:, :, :, si);
-            elseif (self.format == Format.H_N)
+            elseif (self.db_format == Format.H_N)
                 data = self.db(:, si);
-            elseif (self.format == Format.N_H_W_CH)
+            elseif (self.db_format == Format.N_H_W_CH)
                 data = self.db(si, :, :, :);
-            elseif (self.format == Format.N_H)
+            elseif (self.db_format == Format.N_H)
                 data = self.db(si, :);
             end
         end
@@ -382,29 +491,29 @@ classdef NNdb < handle
             % Imports
             import nnf.db.Format;
 
-            % Add data according to the format (dynamic allocation)
-            if (self.format == Format.H_W_CH_N)
+            % Add data according to the db_format (dynamic allocation)
+            if (self.db_format == Format.H_W_CH_N)
                 if (isempty(self.db))
                     self.db = data;
                 else
                     self.db = cat(4, self.db, data);
                 end
 
-            elseif (self.format == Format.H_N)
+            elseif (self.db_format == Format.H_N)
                 if (isempty(self.db))
                     self.db = data;
                 else
                     self.db = cat(2, self.db, data);
                 end               
 
-            elseif (self.format == Format.N_H_W_CH)
+            elseif (self.db_format == Format.N_H_W_CH)
                 if (isempty(self.db))
                     self.db = data;
                 else
                     self.db = cat(1, self.db, data);
                 end 
 
-            elseif (self.format == Format.N_H)
+            elseif (self.db_format == Format.N_H)
                 if (isempty(self.db))
                     self.db = data;
                 else
@@ -458,19 +567,19 @@ classdef NNdb < handle
             % Sample count
             n = size(features, 2);
 
-            % Add data according to the format (dynamic allocation)
-            if (self.format == Format.H_W_CH_N)
+            % Add data according to the db_format (dynamic allocation)
+            if (self.db_format == Format.H_W_CH_N)
                 data = reshape(features, h, w, ch, n);
 
-            % elseif (self.format == Format.H_N)
-            %     data = data;
+            % elseif (self.db_format == Format.H_N)
+            %     data = features;
 
-            elseif (self.format == Format.N_H_W_CH)
+            elseif (self.db_format == Format.N_H_W_CH)
                 data = reshape(features, h, w, ch, n);
                 data = permute(data, [4 1 2 3]);
 
-            elseif (self.format == Format.N_H)
-                data = data';                
+            elseif (self.db_format == Format.N_H)
+                data = features';                
             end
             
             data = cast(data, dtype);
@@ -507,7 +616,7 @@ classdef NNdb < handle
         end
                 
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        function [features, m] = get_features_mean_diff(self, cls_lbl, m) 
+        function [nndb, m] = get_features_mean_diff(self, cls_lbl, m) 
             % Get the 2D feature mean difference matrix for specified class labels and mean.
             % 
             % Parameters
@@ -520,26 +629,31 @@ classdef NNdb < handle
             % 
             % Returns
             % -------
-            % features : `array_like` -double
-            %       2D feature difference matrix.
+            % nndb : :obj:`NNdb`
+            %     NNdb object (Format.H_N) that represents the mean-diff dataset.
             %
             % m : `array_like` -double
             %       Calculated mean.
-            %            
+            %        
+            
+            % Imports
+            import nnf.db.NNdb;
+            import nnf.db.Format;
             
             if (nargin < 2); cls_lbl = []; end  
             if (nargin < 3); m = []; end  
             
-            features = self.get_features(cls_lbl)
+            features = self.get_features(cls_lbl);
             if (isempty(m)); m = mean(features, 2); end
            
             features = (features - repmat(m, [1, self.n]));
+            nndb = NNdb([self.name ' (mean-diff)'], features, self.n_per_class, false, self.cls_lbl, Format.H_N);
         end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%      
-        function set_db(self, db, n_per_class, build_cls_lbl, cls_lbl, format) 
+        function set_db(self, db, n_per_class, build_cls_lbl, cls_lbl, db_format) 
             % SET_DB: sets database and update relevant instance variables.
-            % i.e (db, format, cls_lbl, cls_n, etc)
+            % i.e (db, db_format, cls_lbl, cls_n, etc)
             %
             % Parameters
             % ----------
@@ -556,7 +670,7 @@ classdef NNdb < handle
             % cls_lbl : vector -uint16 or scalar, optional
             %     Class index array. (Default value = []).
             % 
-            % format : nnf.db.Format, optinal
+            % db_format : nnf.db.Format, optinal
             %     Format of the database. (Default value = 1, start from 1).
             %
             
@@ -567,22 +681,31 @@ classdef NNdb < handle
             if (isempty(db))
                 error('ARG_ERR: n_per_class: undefined');
             end                      
-            if (isempty(format))
-                error('ARG_ERR: format: undefined');
+            if (isempty(db_format))
+                error('ARG_ERR: db_format: undefined');
             end            
             if (~isempty(cls_lbl) && build_cls_lbl)
                 warning('ARG_CONFLICT: cls_lbl, build_cls_lbl');
             end
             
+            % Data belong to same class need to be placed in consecutive blocks
+            if (~isempty(cls_lbl))
+                [~,~,IC] = unique(cls_lbl, 'stable');
+                if (~isequal(sort(IC), IC))
+                    error(['Data belong to same class need to be placed in consecutive blocks' ...
+                                'Hence the class labels should be sorted order.']);
+                end
+            end
+            
             % Set defaults for n_per_class
             if (isempty(n_per_class) && isempty(cls_lbl))
-                if (format == Format.H_W_CH_N)
+                if (db_format == Format.H_W_CH_N)
                     [~, ~, ~, n_per_class] = size(db);
-                elseif (format == Format.H_N)
+                elseif (db_format == Format.H_N)
                     [~, n_per_class] = size(db);
-                elseif (format == Format.N_H_W_CH)
+                elseif (db_format == Format.N_H_W_CH)
                     [n_per_class, ~, ~, ~] = size(db);
-                elseif (format == Format.N_H)
+                elseif (db_format == Format.N_H)
                     [n_per_class, ~] = size(db);
                 end
                 
@@ -592,7 +715,7 @@ classdef NNdb < handle
             end
             
         	% Set defaults for instance variables
-            self.db = []; self.format = [];
+            self.db = []; self.db_format = [];
             self.h = 0; self.w = 1; self.ch = 1; self.n = 0;
             self.n_per_class = [];
             self.cls_st = [];
@@ -601,24 +724,24 @@ classdef NNdb < handle
             
             % Set values for instance variables
             self.db     = db;
-            self.format = format;
+            self.db_format = db_format;
             self.build_cls_lbl = build_cls_lbl;
             
-            % Set h, w, ch, np according to the format    
-            if (format == Format.H_W_CH_N)
+            % Set h, w, ch, np according to the db_format    
+            if (db_format == Format.H_W_CH_N)
                 [self.h, self.w, self.ch, self.n] = size(self.db);
-            elseif (format == Format.H_N)
+            elseif (db_format == Format.H_N)
                 [self.h, self.n] = size(self.db);
-            elseif (format == Format.N_H_W_CH)
+            elseif (db_format == Format.N_H_W_CH)
                 [ self.n, self.h, self.w, self.ch] = size(self.db);
-            elseif (format == Format.N_H)
+            elseif (db_format == Format.N_H)
                 [self.n, self.h] = size(self.db);
             end
                    
             % Set class count, n_per_class, class start index
             if (isscalar(n_per_class))
                 if (mod(self.n, n_per_class) > 0)
-                    error('Total image count (n) is not divisable by image per class (n_per_class)')
+                    error('Total image count (n) is not divisible by image per class (n_per_class)')
                 end            
                 self.cls_n = self.n / n_per_class;
                 self.n_per_class =  uint16(repmat(n_per_class, 1, self.cls_n));
@@ -671,13 +794,16 @@ classdef NNdb < handle
         end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        function new_nndb = clone(self, name) 
+        function nndb = clone(self, name) 
             % CLONE: Creates a copy of this NNdb object
             %
             % Imports 
             import nnf.db.NNdb;
-            
-            new_nndb = NNdb(name, self.db, self.n_per_class, self.build_cls_lbl, self.cls_lbl, self.format);
+            if (~isempty(self.cls_lbl))
+                nndb = NNdb(name, self.db, self.n_per_class, false, self.cls_lbl, self.db_format);
+            else
+                nndb = NNdb(name, self.db, self.n_per_class, self.build_cls_lbl, self.cls_lbl, self.db_format);
+            end
         end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -692,9 +818,12 @@ classdef NNdb < handle
             % n_per_class : int, optional
             %     Images per class.
             % 
-            % scale : int, optional
-            %     Scaling factor. (Default value = [])
-            % 
+            % scale : float or `array_like`, optional
+            %       Scale factor.
+            %       * float - Fraction of current size.
+            %       * tuple - Size of the output image.
+            %       (Default value = None).
+            %
             % offset : int, optional
             %     Image index offset to the dataset. (Default value = 1)
             %
@@ -781,9 +910,12 @@ classdef NNdb < handle
             % n_per_class : int, optional
             %     Images per class.
             % 
-            % scale : int, optional
-            %     Scaling factor. (Default value = [])
-            % 
+            % scale : float or `array_like`, optional
+            %       Scale factor.
+            %       * float - Fraction of current size.
+            %       * tuple - Size of the output image.
+            %       (Default value = None).
+            %
             % offset : int, optional
             %     Image index offset to the dataset. (Default value = 1)
             %
@@ -854,12 +986,12 @@ classdef NNdb < handle
         end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        function save_to_dir(self, filepath, create_cls_dir) 
+        function save_to_dir(self, dirpath, create_cls_dir) 
             % Save images to a directory. 
             % 
             % Parameters
             % ----------
-            % path : string
+            % dirpath : string
             %     Path to directory.
             % 
             % create_cls_dir : bool, optional
@@ -870,32 +1002,32 @@ classdef NNdb < handle
             if (nargin < 3); create_cls_dir = true; end
             
             % Make a new directory to save images
-            if (~isempty(filepath) && exist(filepath, 'dir') == 0)
-                mkdir(filepath);
+            if (~isempty(dirpath) && exist(dirpath, 'dir') == 0)
+                mkdir(dirpath);
             end
             
             img_i = 1;
             for cls_i=1:self.cls_n
 
                 cls_name = num2str(cls_i); 
-                if (create_cls_dir && exist(fullfile(filepath, cls_name), 'dir') == 0)
-                    mkdir(fullfile(filepath, cls_name));
+                if (create_cls_dir && exist(fullfile(dirpath, cls_name), 'dir') == 0)
+                    mkdir(fullfile(dirpath, cls_name));
                 end
 
                 for cls_img_i=1:self.n_per_class(cls_i)
                     if (create_cls_dir)
                         img_name = num2str(cls_img_i);
-                        imwrite(self.get_data_at(img_i), fullfile(filepath, cls_name, [img_name '.jpg']), 'jpg');
+                        imwrite(self.get_data_at(img_i), fullfile(dirpath, cls_name, [img_name '.jpg']), 'jpg');
                     else                
                         img_name = [cls_name '_' num2str(cls_img_i)];
-                        imwrite(self.get_data_at(img_i), fullfile(filepath, [img_name '.jpg']), 'jpg');
+                        imwrite(self.get_data_at(img_i), fullfile(dirpath, [img_name '.jpg']), 'jpg');
                     end
                     
                     img_i = img_i + 1;
                 end
             end
         end
-            
+
        	%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         function plot(self, n, offset) 
             % PLOT: plots the features.
@@ -979,18 +1111,18 @@ classdef NNdb < handle
         function init_db_fields__(self) 
             import nnf.db.Format;
             
-            if (self.format == Format.H_W_CH_N)
+            if (self.db_format == Format.H_W_CH_N)
                 [self.h, self.w, self.ch, self.n] = size(self.db);
 
-            elseif (self.format == Format.H_N)
+            elseif (self.db_format == Format.H_N)
                 self.w = 1;
                 self.ch = 1;
                 [self.h, self.n] = size(self.db);
 
-            elseif (self.format == Format.N_H_W_CH)
+            elseif (self.db_format == Format.N_H_W_CH)
                 [self.n, self.h, self.w, self.ch] = size(self.db);
 
-            elseif (self.format == Format.N_H)
+            elseif (self.db_format == Format.N_H)
                 self.w = 1;
                 self.ch = 1;
                 [self.n, self.h] = size(self.db);
@@ -1011,15 +1143,15 @@ classdef NNdb < handle
             import nnf.db.Format; 
             
             % N x CH x H x W
-            if (self.format == Format.N_H_W_CH || self.format == Format.H_W_CH_N)
+            if (self.db_format == Format.N_H_W_CH || self.db_format == Format.H_W_CH_N)
                 db = permute(self.db_scipy, [1 4 2 3]);
                 
             % N x 1 x H x 1
-            elseif (self.format == Format.N_H || self.format == Format.H_N)
+            elseif (self.db_format == Format.N_H || self.db_format == Format.H_N)
                 db = reshape(self.db_scipy, self.n, 1, self.h, 1);
 
             else
-                error('Unsupported db format');
+                error('Unsupported db_format');
             end
         end
         
@@ -1031,15 +1163,15 @@ classdef NNdb < handle
             import nnf.db.Format; 
             
             % N x H x W x CH
-            if (self.format == Format.N_H_W_CH || self.format == Format.H_W_CH_N)
+            if (self.db_format == Format.N_H_W_CH || self.db_format == Format.H_W_CH_N)
                 db = self.db_scipy;
 
             % N x H
-            elseif (self.format == Format.N_H || self.format == Format.H_N)
+            elseif (self.db_format == Format.N_H || self.db_format == Format.H_N)
                 db = self.db_scipy(:, :, 1, 1);
 
             else
-                error('Unsupported db format');
+                error('Unsupported db_format');
             end
         end
 
@@ -1051,19 +1183,19 @@ classdef NNdb < handle
             import nnf.db.Format; 
             
             % N x H x W x CH or N x H  
-            if (self.format == Format.N_H_W_CH || self.format == Format.N_H)
+            if (self.db_format == Format.N_H_W_CH || self.db_format == Format.N_H)
                 db = self.db;
                 
             % H x W x CH x N
-            elseif (self.format == Format.H_W_CH_N)
+            elseif (self.db_format == Format.H_W_CH_N)
                 db = permute(self.db,[4 1 2 3]);                
 
             % H x N
-            elseif (self.format == Format.H_N)
+            elseif (self.db_format == Format.H_N)
                 db = permute(self.db,[2 1]);
                 
             else
-                error('Unsupported db format');
+                error('Unsupported db_format');
             end
         end
 
@@ -1081,19 +1213,19 @@ classdef NNdb < handle
             import nnf.db.Format; 
 
             % H x W x CH x N or H x N  
-            if (self.format == Format.H_W_CH_N || self.format == Format.H_N)
+            if (self.db_format == Format.H_W_CH_N || self.db_format == Format.H_N)
                 db = self.db;
 
             % N x H x W x CH
-            elseif (self.format == Format.N_H_W_CH)
+            elseif (self.db_format == Format.N_H_W_CH)
                 db = permute(self.db,[2 3 4 1]);
 
             % N x H
-            elseif (self.format == Format.N_H)
+            elseif (self.db_format == Format.N_H)
                 db = permute(self.db,[2 1]);
 
             else
-                raise Exception("Unsupported db format");
+                raise Exception("Unsupported db_format");
             end
         end        
         
@@ -1111,7 +1243,7 @@ classdef NNdb < handle
             import nnf.db.NNdb;
             
             % Construct a new object
-            nndb = NNdb([self.name ' (0-1)'], double(self.db)/255, self.n_per_class, false, self.cls_lbl, self.format);            
+            nndb = NNdb([self.name ' (0-1)'], double(self.db)/255, self.n_per_class, false, self.cls_lbl, self.db_format);
         end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -1124,16 +1256,16 @@ classdef NNdb < handle
             % Imports
             import nnf.db.Format;
             
-            if (self.format == Format.H_W_CH_N)
+            if (self.db_format == Format.H_W_CH_N)
                 value = 3;
-            elseif (self.format == Format.H_N)
+            elseif (self.db_format == Format.H_N)
                 value = 0;
-            elseif (self.format == Format.N_H_W_CH)
+            elseif (self.db_format == Format.N_H_W_CH)
                 value = 3;
-            elseif (self.format == Format.N_H)
+            elseif (self.db_format == Format.N_H)
                 value = 0;
             else
-                error('Unsupported db format')
+                error('Unsupported db_format')
             end
         end
         
