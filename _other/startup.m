@@ -1,3 +1,8 @@
+% DO NOT run startup.m in deployed mode 
+if isdeployed
+    return
+end
+
 % Root folder
 base_path = ['E:/Clouds/Google Drive/Curtin Univeristy (work)/Matlab/src'];
 
