@@ -132,8 +132,8 @@ classdef MCF
                         
                         if (~isempty(nndb_aug_tr))
                             assert(~isempty(nndb_aug_val));
-                            nndb_tr = nndb_aug_tr.concat_features(nndb_tr);
-                            nndb_val = nndb_aug_val.concat_features(nndb_val);
+                            nndb_tr = nndb_aug_tr.concat(nndb_tr);
+                            nndb_val = nndb_aug_val.concat(nndb_val);
                         end                        
                         
                         % Calculate accuracy                        

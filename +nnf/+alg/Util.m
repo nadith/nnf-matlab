@@ -157,8 +157,8 @@ classdef Util
                         
                 if (~isempty(nndb_aug_gal))
                     assert(~isempty(nndb_aug_probe));
-                    nndb_aug_gal = nndb_aug_gal.concat_features(nndb_tr);
-                    nndb_aug_probe = nndb_aug_probe.concat_features(nndb_te);
+                    nndb_aug_gal = nndb_aug_gal.concat(nndb_tr);
+                    nndb_aug_probe = nndb_aug_probe.concat(nndb_te);
                 else
                     nndb_aug_gal = nndb_tr;
                     nndb_aug_probe = nndb_te;
@@ -327,7 +327,7 @@ classdef Util
                 if (info.perf.use_mem)
                     % Large memory foot print, less CPU overhead
                     
-                    % Same dimension as gp_X, compatiability for matrix operations
+                    % Same dimension as gp_X, compatibility for matrix operations
                     gp_XT1 = reshape(gp_XT(:, te_idx), fsize, []);
 
                     if (info.g_norm)

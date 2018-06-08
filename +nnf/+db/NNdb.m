@@ -207,97 +207,113 @@ classdef NNdb < handle
             % nndb : :obj:`NNdb`
             %     NNdb object that represents the dataset.
             %
-        
+            % Notes
+            % -----
+            % Merge can be merge nndbs to a empty nndb as well.
+            %
+            
             % Imports
             import nnf.db.NNdb;
             import nnf.db.Format;
-            
-            if (~isempty(self.db) && ~isempty(nndb.db))            
-                assert(self.h == nndb.h && self.w == nndb.w && self.ch == nndb.ch);
-                assert(self.cls_n == nndb.cls_n);
-                assert(strcmp(class(self.db), class(nndb.db)))
-                assert(self.db_format == nndb.db_format)
+                  
+            if (~isempty(self.db) && isempty(nndb.db))
+                nndb = self.clone('merged');
+                return;
             end
-        
-            nndb_merged = [];
-            db_format = self.db_format;
-            cls_n = self.cls_n;
             
-            if (~isempty(self.db))
-                if (isempty(nndb.db))
-                    nndb_merged = self.clone('merged');
-                end
-            end
-
-            if (~isempty(nndb.db))
-                if (isempty(self.db))
-                    nndb_merged = nndb.clone('merged');
-                end
+            if (~isempty(nndb.db) && isempty(self.db))
+                nndb = nndb.clone('merged');
+                return;
             end
             
             if (isempty(self.db) && isempty(nndb.db))
-                 nndb_merged = self.clone('merged');
+                nndb = self;
+                return;
             end
-            
-            if (isempty(nndb_merged))
-                nndb_merged = NNdb('merged', [], [], false, [], db_format);
-                
-                for i=1:cls_n
+              
+            assert(self.h == nndb.h && self.w == nndb.w && self.ch == nndb.ch);
+            assert(self.cls_n == nndb.cls_n);
+            assert(strcmp(class(self.db), class(nndb.db)))
+            assert(self.db_format == nndb.db_format)                
 
-                    % Fetch data from db1
-                    cls_st = self.cls_st(i);
-                    cls_end = cls_st + uint32(self.n_per_class(i)) - uint32(1); 
-                    nndb_merged.add_data(self.get_data_at(cls_st:cls_end));
+            nndb_merged = NNdb('merged', [], [], false, [], self.db_format);
 
-                    % Fetch data from db2
-                    cls_st = nndb.cls_st(i);
-                    cls_end = cls_st + uint32(nndb.n_per_class(i)) - uint32(1);
-                    nndb_merged.add_data(nndb.get_data_at(cls_st:cls_end));
+            for i=1:self.cls_n
+                % Fetch data from db1
+                cls_st = self.cls_st(i);
+                cls_end = cls_st + uint32(self.n_per_class(i)) - uint32(1); 
+                nndb_merged.add_data(self.get_data_at(cls_st:cls_end));
 
-                    % Update related paramters after adding data in the above step
-                    nndb_merged.update_attr(true, self.n_per_class(i) + nndb.n_per_class(i));
-                end
+                % Fetch data from db2
+                cls_st = nndb.cls_st(i);
+                cls_end = cls_st + uint32(nndb.n_per_class(i)) - uint32(1);
+                nndb_merged.add_data(nndb.get_data_at(cls_st:cls_end));
+
+                % Update related paramters after adding data in the above step
+                nndb_merged.update_attr(true, self.n_per_class(i) + nndb.n_per_class(i));
             end
-            
-            nndb = nndb_merged;
+
+            nndb = nndb_merged;            
         end
                 
+        
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        function nndb = concat_features(self, nndb) 
-            % CONCAT_FEATURES: Concat `nndb` instance features with `self` instance features.
-            %   Both `nndb` and self instances must be in the db_format Format.H_N 
-            %   or Format.N_H (2D databases)
+        function nndb = concat(self, nndb) 
+            % CONCAT: Concat `nndb` instance with `self` instance; stack the dbs.
             % 
             % Parameters
             % ----------
             % nndb : :obj:`NNdb`
-            %     NNdb object that represents the dataset.
+            %     New :obj:`NNdb` object that represents the concatenated dataset.
             %
-        
+            % Notes
+            % -----
+            % CONCAT can concatenate nndbs to a empty nndb as well.
+            %
+            
             % Imports
             import nnf.db.NNdb;
             import nnf.db.Format;
             
-            assert(self.n == nndb.n);
-            assert(isequal(self.n_per_class, nndb.n_per_class));
-            assert(self.cls_n == nndb.cls_n);
-            assert(strcmp(class(self.db), class(nndb.db)))
-            assert(self.db_format == nndb.db_format)
-            assert(self.db_format == Format.H_N || self.db_format == Format.N_H);        
-                        
-            if (self.db_format == Format.H_N)
-                db = [self.db; nndb.db];
-            
-            elseif (self.db_format == Format.N_H)                
-                db = [self.db nndb.db];
+            if (~isempty(self.db) && isempty(nndb.db))
+                nndb = self.clone('concatenated');
+                return;
             end
             
-            nndb = NNdb('features_augmented', db, self.n_per_class, true, [], self.db_format);
+            if (~isempty(nndb.db) && isempty(self.db))
+                nndb = nndb.clone('concatenated');
+                return;
+            end
+            
+            if (isempty(self.db) && isempty(nndb.db))
+                nndb = self;
+                return;
+            end
+            
+            assert(isequal(unique(self.n_per_class), unique(nndb.n_per_class)));
+            assert(strcmp(class(self.db), class(nndb.db)))
+            assert(self.db_format == nndb.db_format)
+            
+            db = [];
+            if (self.db_format == Format.H_W_CH_N)
+                db = cat(4, self.db, nndb.db);                
+                
+            elseif (self.db_format == Format.H_N)
+                db = cat(2, self.db, nndb.db);                
+                
+            elseif (self.db_format == Format.N_H_W_CH)
+                db = cat(1, self.db, nndb.db);                
+                
+            elseif (self.db_format == Format.N_H)
+                db = cat(1, self.db, nndb.db);                
+            end
+            
+            nndb = NNdb('concatenated', db, unique(self.n_per_class), true, [], self.db_format);
         end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         function [self] = fliplr(self)
-            % FLIPLR: Flip the image order in each class of this `nndb` object.            
+            % FLIPLR: Flip the image order in each class of this `nndb` object.
             % 
             
             dtype = class(self.db);
@@ -443,7 +459,7 @@ classdef NNdb < handle
             % Set class label of nndb, dynamic expansion
             cls_lbl = self.cls_n;
             if (isempty(self.cls_lbl)); self.cls_lbl = uint16([]); end
-            self.cls_lbl = cat(2, self.cls_lbl, uint16([cls_lbl]));
+            self.cls_lbl = cat(2, self.cls_lbl, uint16(repmat(cls_lbl, 1, sample_n)));
         end       
             
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -784,7 +800,7 @@ classdef NNdb < handle
             cls_lbl = uint16(zeros(1, self.n));    
             st = 1;
             for i = 1:self.cls_n
-                cls_lbl(st: st + n_per_class(i) - 1) = uint16(ones(1, n_per_class(i)) * i);                
+                cls_lbl(st: st + n_per_class(i) - 1) = uint16(ones(1, n_per_class(i))) * i;                
                 st = st + n_per_class(i);
             end
             
@@ -889,7 +905,7 @@ classdef NNdb < handle
                 ws = struct;
                 ws.height = 5;
                 ws.width = 5;
-                if (self.ch > 1); ws.color = [255 0 0]; else; ws.color = 255; end
+                if (self.ch > 1); ws.color = [0 0 0]; else; ws.color = 255; end
 
                 varargin{end + 1} = 'WS';
                 varargin{end + 1} = ws;
@@ -899,7 +915,7 @@ classdef NNdb < handle
         end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        function show(self, varargin)
+        function show(self, varargin) 
             % SHOW: Visualizes the db in a image grid.
             %
             % Parameters
