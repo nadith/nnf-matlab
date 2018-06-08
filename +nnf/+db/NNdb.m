@@ -255,8 +255,7 @@ classdef NNdb < handle
 
             nndb = nndb_merged;            
         end
-                
-        
+            
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         function nndb = concat(self, nndb) 
             % CONCAT: Concat `nndb` instance with `self` instance; stack the dbs.

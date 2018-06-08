@@ -1,3 +1,4 @@
+%%
 % Import classes required for NNdb
 import nnf.db.NNdb;
 import nnf.db.Format;
@@ -276,6 +277,7 @@ figure, nndb_aln.show(10, 10)
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Example 1: Select randomly unique 3 images from each class and save it to a database file
+%
 import nnf.utl.rand_unq
 cell_indices = cell(0, 0);
 cls_count = 100;
@@ -431,3 +433,42 @@ info.MaxIter = 1000;
 info.Replicates = 5;
 [label,centers]=KMEANS.do(nndb_tr,info);
 
+%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% PLOTS, LATEX TABLES
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+import nnf.utl.plot.PlotMan
+import nnf.utl.plot.Table
+
+% Create a table according to the table example
+% tab = Table.get_example();
+tab = Table.get_example2();
+
+% Create a `PlotMan` instance
+pm = PlotMan(tab);
+pm.plot();
+
+% For Latex tables
+import nnf.utl.plot.LatexMan
+lm = LatexMan('test.txt', tab);
+lm.write_table(true);
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Custom x-axis tick labels
+%
+import nnf.utl.plot.PlotMan
+import nnf.utl.plot.Table
+
+% Create a table according to the table example
+tab = Table.get_example3();
+
+% Create a `PlotMan` instance
+params = struct;
+params.x_label = '';
+params.legend_pos = 'southwest';
+pm = PlotMan(tab, params);
+pm.plot();
+
+% Set custom ticks
+xticks([1 2 3])
+xticklabels({'PCA','LDA','SRC'})
