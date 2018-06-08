@@ -195,7 +195,7 @@ classdef PCA < nnf.alg.MCC
             
             db_te_r = bsxfun(@plus, W * S, m);
             db_te_r = reshape(uint8(db_te_r), h, w, ch, []);
-            nndb_te_r = NNdb('te_reconst', db_te_r, nndb_te.n_per_class, nndb_te.build_cls_lbl, nndb_te.cls_lbl, nndb_te.format);
+            nndb_te_r = NNdb('te_reconst', db_te_r, nndb_te.n_per_class, nndb_te.build_cls_lbl, nndb_te.cls_lbl, nndb_te.db_format);
             
             % Visualize eigen faces if required
             if (isfield(info,'visualize') && info.visualize)
