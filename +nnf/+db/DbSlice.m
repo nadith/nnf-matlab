@@ -9,6 +9,7 @@ classdef DbSlice
     % sel.tr_occlusion_rate     = [];   % Occlusion rate for `tr_col_indices`
     % sel.tr_occlusion_type     = [];   % ('t':top, 'b':bottom, 'l':left, 'r':right) for `tr_col_indices`
     % sel.tr_occlusion_offset   = [];   % Occlusion start offset from top/bottom/left/right corner depending on `tr_occlusion_type`
+    % sel.tr_occlusion_filter   = [];   % Occlusion filter for custom occlusion patterns
     % sel.tr_out_col_indices    = [];   % Training target column indices
     % sel.val_col_indices       = [];   % Validation column indices
     % sel.val_out_col_indices   = [];   % Validation target column indices
@@ -107,7 +108,7 @@ classdef DbSlice
             end            
             if ((~isempty(sel.use_rgb) && sel.use_rgb) && ~isempty(sel.color_indices))
                 error('ARG_CONFLICT: sel.use_rgb, sel.color_indices');
-            end                                              
+            end
 
             % Set defaults
             if (nargin < 5)
@@ -252,7 +253,7 @@ classdef DbSlice
                         if (edataset == Dataset.TR)
                             
                             % If noise or occlusion is required
-                            if ((~isempty(sel.tr_noise_rate) || ~isempty(sel.tr_occlusion_rate)) && ...
+                            if ((~isempty(sel.tr_noise_rate) || ~isempty(sel.tr_occlusion_rate) || ~isempty(sel.tr_occlusion_type)) && ...
                                 isempty(tci_offsets))
                                 tci_offsets = find(sel.tr_col_indices == col_idx);
                             end
@@ -269,6 +270,7 @@ classdef DbSlice
                             occl_rate = [];
                             occl_type = [];
                             occl_offset = 0;
+                            occl_filter = [];
                             if (~isempty(sel.tr_occlusion_rate) && ...
                                     (tci_offsets(dsi) <= numel(sel.tr_occlusion_rate)) && ...
                                     (0 ~= sel.tr_occlusion_rate(tci_offsets(dsi))))
@@ -283,8 +285,17 @@ classdef DbSlice
                                 end
                             end
                             
+                            % For custom occlusion filter
+                            if (~isempty(sel.tr_occlusion_type) && ...
+                                    (tci_offsets(dsi) <= numel(sel.tr_occlusion_type)) && ...
+                                    ('f' == sel.tr_occlusion_type(tci_offsets(dsi))))
+                                if (~isempty(sel.tr_occlusion_filter))
+                                    occl_filter = sel.tr_occlusion_filter{tci_offsets(dsi)};
+                                end
+                            end
+                            
                             DbSlice.build_nndb_tr_(nndbs, pi, is_new_class, pimg, ...
-                                                          noise_rate, occl_rate, occl_type, occl_offset);                            
+                                                          noise_rate, occl_rate, occl_type, occl_offset, occl_filter);                            
 
                         % Build Training Target DB
                         elseif (edataset == Dataset.TR_OUT)
@@ -609,8 +620,24 @@ classdef DbSlice
             % sel.tr_occlusion_offset = [0 0.25 0.4];   % Offset from right since 'tr_occlusion_type = r'
             sel.class_range = [1:10];
             [nndb_tr, ~, ~, ~, ~, ~, ~] = DbSlice.slice(nndb, sel);
-            
 
+            
+            % 
+            % Select 1st 2nd 4th images of each identity for training + 
+            %               use custom occlusion filter for 66x66 images.
+            occl_filter = ones(66, 66);
+            for i=1:33
+                for j=1:34-i
+                    occl_filter(i, j) = 0;
+                end
+            end
+            nndb = NNdb('original', imdb, im_per_class, true);
+            sel = Selection();
+            sel.tr_col_indices = [1:2 4];
+            sel.tr_occlusion_filter = occl_filter;
+            sel.class_range = [1:10];
+            [nndb_tr, ~, ~, ~, ~, ~, ~] = DbSlice.slice(nndb, sel);
+            
            	% 
             % To prepare regression datasets, training dataset and training target dataset
             % Select 1st 2nd 4th images of each identity for training.
@@ -847,7 +874,7 @@ classdef DbSlice
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         function nndbs = build_nndb_tr_(nndbs, pi, is_new_class, img, ...
-                                                        noise_rate, occl_rate, occl_type, occl_offset) 
+                                                        noise_rate, occl_rate, occl_type, occl_offset, oc_filter) 
             % BUILD_NNDB_TR: builds the nndb training database.
             %          
             % Parameters
@@ -889,50 +916,50 @@ classdef DbSlice
              
             if (isempty(nndbs)); return; end
             nndb = nndbs(pi);
+    
+            % Information about image
+            [h, w, ch] = size(img);
             
-            if (~isempty(occl_rate) || ~isempty(noise_rate))
-                
-                [h, w, ch] = size(img);
-                
-                % Adding different occlusions depending on the percentage
-                if (~isempty(occl_rate))
-                    oc_filter = DbSlice.get_occlusion_patch(h, w, class(img), occl_type, occl_rate, occl_offset);                    
-                    
-                    % For grey scale
-                    if (ch == 1)
-                        img = oc_filter.*img;
-                    else
-                        % For colored
-                        img = repmat(oc_filter, 1, 1, ch).*img;
-                    end
-                    
-                % Add different noise depending on the type or rate
-                % (ref. Enums/Noise)
-                elseif (~isempty(noise_rate) && (noise_rate == Noise.G))
-                    img = imnoise(img, 'gaussian');
-                    % img = imnoise(img, 'gaussian');
-                    % img = imnoise(img, 'gaussian');
-                    % img = imnoise(img, 'gaussian');
-                    
-                elseif (~isempty(noise_rate))
-                    % Perform random corruption
-                    % Corruption Size (H x W)
-                    cs = [uint16(h*noise_rate) uint16(w*noise_rate)]; 
+            % Adding user-defined occlusion filter or different occlusions depending on the percentage
+            if (~isempty(oc_filter) || ~isempty(occl_rate))
+                if isempty(oc_filter)
+                    oc_filter = DbSlice.get_occlusion_patch(h, w, class(img), occl_type, occl_rate, occl_offset);
+                end
 
-                    % Random location choice
-                    % Start of H, W (location)
-                    sh = 1 + rand()*(h-cs(1)-1);
-                    sw = 1 + rand()*(w-cs(2)-1);
+                % For grey scale
+                if (ch == 1)
+                    img = uint8(oc_filter).*img;
+                else
+                    % For colored
+                    img = repmat(uint8(oc_filter), 1, 1, ch).*img;
+                end
 
-                    % Set the corruption
-                    cimg = uint8(DbSlice.rand_corrupt_(cs(1), cs(2)));
+            % Add different noise depending on the type or rate
+            % (ref. Enums/Noise)
+            elseif (~isempty(noise_rate) && (noise_rate == Noise.G))
+                img = imnoise(img, 'gaussian');
+                % img = imnoise(img, 'gaussian');
+                % img = imnoise(img, 'gaussian');
+                % img = imnoise(img, 'gaussian');
 
-                    if (ch == 1)
-                        img(sh:sh+cs(1)-1, sw:sw+cs(2)-1) = cimg;
-                    else
-                        for ich=1:ch
-                            img(sh:sh+cs(1)-1, sw:sw+cs(2)-1, ich) = cimg;
-                        end
+            elseif (~isempty(noise_rate))
+                % Perform random corruption
+                % Corruption Size (H x W)
+                cs = [uint16(h*noise_rate) uint16(w*noise_rate)]; 
+
+                % Random location choice
+                % Start of H, W (location)
+                sh = 1 + rand()*(h-cs(1)-1);
+                sw = 1 + rand()*(w-cs(2)-1);
+
+                % Set the corruption
+                cimg = uint8(DbSlice.rand_corrupt_(cs(1), cs(2)));
+
+                if (ch == 1)
+                    img(sh:sh+cs(1)-1, sw:sw+cs(2)-1) = cimg;
+                else
+                    for ich=1:ch
+                        img(sh:sh+cs(1)-1, sw:sw+cs(2)-1, ich) = cimg;
                     end
                 end
             end
