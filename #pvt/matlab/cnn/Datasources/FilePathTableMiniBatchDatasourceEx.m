@@ -39,7 +39,6 @@ classdef FilePathTableMiniBatchDatasourceEx <...
         MiniBatchSizeInternal
     end
     
-    
     % Newly added properties
     properties (Access = private)
         outputFile_
