@@ -47,6 +47,8 @@ classdef DskmanDataIterator < nnf.core.iters.DataIterator
         
         union_cls_range;
         union_col_range;
+        
+        user_data; % For external use
     end
     
     properties (SetAccess = protected)
@@ -96,6 +98,9 @@ classdef DskmanDataIterator < nnf.core.iters.DataIterator
         
             % [INHERITED]: Used in __next__() to utilize the generator with yield
             self.gen_next_ = [];
+            
+            % For external use
+            self.user_data = [];
         end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%

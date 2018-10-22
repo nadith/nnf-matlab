@@ -6,10 +6,11 @@ classdef DbSlice
     % -----------------------------------
     % sel.tr_col_indices        = [];   % Training column indices
     % sel.tr_noise_rate         = [];   % Noise rate or Noise types for `tr_col_indices`
+        
     % sel.tr_occlusion_rate     = [];   % Occlusion rate for `tr_col_indices`
-    % sel.tr_occlusion_type     = [];   % ('t':top, 'b':bottom, 'l':left, 'r':right) for `tr_col_indices`
-    % sel.tr_occlusion_offset   = [];   % Occlusion start offset from top/bottom/left/right corner depending on `tr_occlusion_type`
-    % sel.tr_occlusion_filter   = [];   % Occlusion filter for custom occlusion patterns
+    % sel.tr_noise_field        = [];   % Noise field for `tr_col_indices`
+    % sel.tr_occlusion_field    = [];   % Occlusion field for `tr_col_indices`
+    % sel.tr_illumination_field = [];   % Illumination field for `tr_col_indices`
     % sel.tr_out_col_indices    = [];   % Training target column indices
     % sel.val_col_indices       = [];   % Validation column indices
     % sel.val_out_col_indices   = [];   % Validation target column indices
@@ -82,6 +83,7 @@ classdef DbSlice
             import nnf.core.iters.memory.DskmanMemDataIterator;
             import nnf.db.Dataset;
             import nnf.db.NNdb;
+            import nnf.utl.Map;
 
             % Set defaults for arguments
             if (isempty(sel))
@@ -252,51 +254,35 @@ classdef DbSlice
                         % Build Training DB
                         if (edataset == Dataset.TR)
                             
-                            % If noise or occlusion is required
-                            if ((~isempty(sel.tr_noise_rate) || ~isempty(sel.tr_occlusion_rate) || ~isempty(sel.tr_occlusion_type)) && ...
-                                isempty(tci_offsets))
-                                tci_offsets = find(sel.tr_col_indices == col_idx);
-                            end
-
-                            % Check whether col_idx is a noise required index 
-                            noise_rate = [];
-                            if (~isempty(sel.tr_noise_rate) && ...
-                                    (tci_offsets(dsi) <= numel(sel.tr_noise_rate)) && ...
-                                    (0 ~= sel.tr_noise_rate(tci_offsets(dsi))))
-                                noise_rate = sel.tr_noise_rate(tci_offsets(dsi));                                
-                            end
-
-                            % Check whether col_idx is a occlusion required index 
-                            occl_rate = [];
-                            occl_type = [];
-                            occl_offset = 0;
-                            occl_filter = [];
-                            if (~isempty(sel.tr_occlusion_rate) && ...
-                                    (tci_offsets(dsi) <= numel(sel.tr_occlusion_rate)) && ...
-                                    (0 ~= sel.tr_occlusion_rate(tci_offsets(dsi))))
-                                occl_rate = sel.tr_occlusion_rate(tci_offsets(dsi));
-
-                                if (~isempty(sel.tr_occlusion_type))
-                                    occl_type = sel.tr_occlusion_type(tci_offsets(dsi));
-                                end
-                                
-                                if (~isempty(sel.tr_occlusion_offset))
-                                    occl_offset = sel.tr_occlusion_offset(tci_offsets(dsi));
-                                end
+                            tci_offset = [];
+                            
+                            % If not set already
+                            if isempty(tci_offsets)                            
+                                % If noise or occlusion or illumination is required
+                                if (~isempty(sel.tr_noise_field) || ...
+                                    ~isempty(sel.tr_occlusion_field) || ...
+                                    ~isempty(sel.tr_illumination_field))
+                                    tci_offsets = find(sel.tr_col_indices == col_idx);
+                                    tci_offset = tci_offsets(dsi);
+                                end                                
+                            else
+                                tci_offset = tci_offsets(dsi);
                             end
                             
-                            % For custom occlusion filter
-                            if (~isempty(sel.tr_occlusion_type) && ...
-                                    (tci_offsets(dsi) <= numel(sel.tr_occlusion_type)) && ...
-                                    ('f' == sel.tr_occlusion_type(tci_offsets(dsi))))
-                                if (~isempty(sel.tr_occlusion_filter))
-                                    occl_filter = sel.tr_occlusion_filter{tci_offsets(dsi)};
-                                end
+                            % PERF: First use of user_data
+                            if isempty(data_generator.user_data)
+                                data_generator.user_data = Map();
                             end
                             
-                            DbSlice.build_nndb_tr_(nndbs, pi, is_new_class, pimg, ...
-                                                          noise_rate, occl_rate, occl_type, occl_offset, occl_filter);                            
-
+                            user_data = data_generator.user_data.setdefault(Dataset.str(edataset), []);
+                            [~, user_data] = DbSlice.build_nndb_tr_(nndbs, pi, is_new_class, pimg, tci_offset, ...
+                                                            sel.tr_noise_field, ...
+                                                            sel.tr_occlusion_field, ...
+                                                            sel.tr_illumination_field, ...
+                                                            user_data);
+                                                        
+                            data_generator.user_data(Dataset.str(edataset)) = user_data;
+                            
                         % Build Training Target DB
                         elseif (edataset == Dataset.TR_OUT)
                             DbSlice.build_nndb_tr_out_(nndbs, pi, is_new_class, pimg);
@@ -451,8 +437,10 @@ classdef DbSlice
             import nnf.db.NNdb;
             import nnf.db.DbSlice;
             import nnf.db.Selection;
-            import nnf.core.generators.NNPatchGenerator;
-            import nnf.db.Noise;
+            import nnf.core.generators.NNPatchGenerator;            
+            import nnf.db.sel.NoiseField
+            import nnf.db.sel.OcclusionField
+            import nnf.db.sel.IlluminationField
                         
             % 
             % Select 1st 2nd 4th images of each identity for training
@@ -505,7 +493,7 @@ classdef DbSlice
             %
             % Select 1st and 2nd image from 1st class and 2nd, 3rd and 5th image from 2nd class for training 
             nndb = NNdb('original', imdb, im_per_class, true);
-            sel = Selection()
+            sel = Selection();
             sel.tr_col_indices      = {[1 2], [2 3 5]};
             sel.class_range         = [1:2];
             [nndb_tr, ~, ~, ~, ~, ~, ~] = DbSlice.slice(nndb, sel);
@@ -573,8 +561,7 @@ classdef DbSlice
             sel.tr_col_indices      = Select.PERCENT_60;
             sel.te_col_indices      = Select.PERCENT_40;
             sel.class_range         = [1:10];
-            [nndb_tr, ~, nndb_te, ~, ~, ~, ~] =...
-                                    DbSlice.slice(nndb, sel);
+            [nndb_tr, ~, nndb_te, ~, ~, ~, ~] = DbSlice.slice(nndb, sel);
             nndb_tr.show(10, 5);
             nndb_te.show(10, 4);
 
@@ -585,23 +572,27 @@ classdef DbSlice
             %               default noise type: random black and white dots.
             nndb = NNdb('original', imdb, im_per_class, true);
             sel = Selection();
-            sel.tr_col_indices = [1:2 4];   %[1 2 4]; 
-            sel.tr_noise_rate  = [0 0.5 0.2];       % percentage of corruption
-            %sel.tr_noise_rate  = [0 0.5 Noise.G];  % last index with Gauss noise
+            sel.tr_col_indices = [1:2 4];   %[1 2 4];            
+            % Param1: Noise type
+            % Param2: Percentage of noise
+            sel.tr_noise_field = NoiseField(['c' 'c' 'c'], [0 0.5 0.2]);
+            % sel.tr_noise_field = NoiseField(['g' 'g' 'g'], []);
             sel.class_range    = [1:10];
             [nndb_tr, ~, ~, ~, ~, ~, ~] = DbSlice.slice(nndb, sel);
 
+            
             % 
             % Select 1st 2nd 4th images of each identity for training + 
             %               add various occlusion types ('t':top, 'b':bottom, 'l':left, 'r':right, 'h':horizontal, 'v':vertical) of varying degree.
             %               default occlusion type: 'b'.
             nndb = NNdb('original', imdb, im_per_class, true);
             sel = Selection();
-            sel.tr_col_indices = [1:2 4];
-            sel.tr_occlusion_rate = [0 0.5 0.2];    % percentage of occlusion
-            sel.tr_occlusion_type = 'ttt';          % occlusion type: 't' for selected tr. indices [1, 2, 4]
-            %sel.tr_occlusion_type = 'tbr' 
-            %sel.tr_occlusion_type = 'lrb' 
+            sel.tr_col_indices = [1:2 4];            
+            % Param1: Occlusion type: 't' for selected tr. indices [1, 2, 4] 
+            % Param2: Percentage of occlusion
+            sel.tr_occlusion_field = OcclusionField('ttt', [0 0.5 0.2]);
+            %sel.tr_occlusion_field = OcclusionField('tbr', [0 0.5 0.2]);
+            %sel.tr_occlusion_field = OcclusionField('lrb', [0 0.5 0.2]);            
             sel.class_range = [1:10];
             [nndb_tr, ~, ~, ~, ~, ~, ~] = DbSlice.slice(nndb, sel);
             
@@ -613,11 +604,10 @@ classdef DbSlice
             nndb = NNdb('original', imdb, im_per_class, true);
             sel = Selection();
             sel.tr_col_indices = [1:2 4];
-            sel.tr_occlusion_rate = [0 0.5 0.2];        % percentage of occlusion
-            sel.tr_occlusion_type = 'ttt';              % occlusion type: 't' for selected tr. indices [1, 2, 4]
-            sel.tr_occlusion_offset = [0 0.25 0.4];     % Offset from top since 'tr_occlusion_type = t'            
-            % sel.tr_occlusion_type = 'rrr';            % occlusion type: 'r' for selected tr. indices [1, 2, 4]
-            % sel.tr_occlusion_offset = [0 0.25 0.4];   % Offset from right since 'tr_occlusion_type = r'
+            % Param1: Occlusion type: 't' for selected tr. indices [1, 2, 4] 
+            % Param2: Percentage of occlusion
+            % Param3: Offset from top since occlusion type = t
+            sel.tr_occlusion_field = OcclusionField('ttt', [0 0.5 0.2], [0 0.25 0.4]);
             sel.class_range = [1:10];
             [nndb_tr, ~, ~, ~, ~, ~, ~] = DbSlice.slice(nndb, sel);
 
@@ -634,9 +624,27 @@ classdef DbSlice
             nndb = NNdb('original', imdb, im_per_class, true);
             sel = Selection();
             sel.tr_col_indices = [1:2 4];
-            sel.tr_occlusion_filter = occl_filter;
+            % Param4: Custom occlusion filter
+            sel.tr_occlusion_field = OcclusionField([], [], [], occl_filter);
             sel.class_range = [1:10];
             [nndb_tr, ~, ~, ~, ~, ~, ~] = DbSlice.slice(nndb, sel);
+            
+            
+            % 
+            % Select 1st 2nd 4th images of each identity for training + 
+            %               add illumination, place the light source @ [0 33] position.
+            sel = Selection();
+            sel.tr_col_indices = [1:2 4];
+            % Param1: Illumination position / Light source placement 
+            % Param2: Covariance
+            % Param3: Brightness factor (0-1)
+            % Param4: Darkness factor (0-1)
+            % Param5: Thresholds (to eliminate the small noise values generated)
+            %           Capture when a pixel value is shifted by 1 due to the light source
+            sel.tr_illumination_field  = IlluminationField([0 33], {[1 0; 0 1], [1 0; 0 1], [10 0; 0 10]}, 0);
+            sel.class_range = [1:10];
+            [nndb_tr, ~, ~, ~, ~, ~, ~] = DbSlice.slice(nndb, sel);
+            
             
            	% 
             % To prepare regression datasets, training dataset and training target dataset
@@ -733,7 +741,7 @@ classdef DbSlice
             %
             
             % Set defaults for arguments
-            if (nargin < 6); occl_offset = 0; end
+            if (nargin < 6 || isempty(occl_offset)); occl_offset = 0; end
             
             oc_filter = ones(h, w);
             oc_filter = cast(oc_filter, dtype);
@@ -744,7 +752,7 @@ classdef DbSlice
                 st = en - sh + 1; if (st < 0); st = 1; end
                 oc_filter(st:en, 1:w) = 0;
 
-            elseif ((occl_type == 'r'))
+            elseif (occl_type == 'r')
                 sh = ceil(occl_rate * w);
                 en = floor((1-occl_offset) * w); 
                 st = en - sh + 1; if (st < 0); st = 1; end
@@ -873,8 +881,8 @@ classdef DbSlice
         end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-        function nndbs = build_nndb_tr_(nndbs, pi, is_new_class, img, ...
-                                                        noise_rate, occl_rate, occl_type, occl_offset, oc_filter) 
+        function [nndbs, user_data] = build_nndb_tr_(nndbs, pi, is_new_class, img, ...
+                                            index, noise_field, occl_field, illu_field, user_data) 
             % BUILD_NNDB_TR: builds the nndb training database.
             %          
             % Parameters
@@ -912,57 +920,18 @@ classdef DbSlice
             % Imports 
             import nnf.db.DbSlice;
             import nnf.db.Format;
-            import nnf.db.Noise;
              
             if (isempty(nndbs)); return; end
             nndb = nndbs(pi);
-    
-            % Information about image
-            [h, w, ch] = size(img);
+                
+            % Add different noise depending on the type or rate
+            if ~isempty(noise_field); img = DbSlice.add_noise_(img, noise_field, index); end
             
             % Adding user-defined occlusion filter or different occlusions depending on the percentage
-            if (~isempty(oc_filter) || ~isempty(occl_rate))
-                if isempty(oc_filter)
-                    oc_filter = DbSlice.get_occlusion_patch(h, w, class(img), occl_type, occl_rate, occl_offset);
-                end
-
-                % For grey scale
-                if (ch == 1)
-                    img = uint8(oc_filter).*img;
-                else
-                    % For colored
-                    img = repmat(uint8(oc_filter), 1, 1, ch).*img;
-                end
-
-            % Add different noise depending on the type or rate
-            % (ref. Enums/Noise)
-            elseif (~isempty(noise_rate) && (noise_rate == Noise.G))
-                img = imnoise(img, 'gaussian');
-                % img = imnoise(img, 'gaussian');
-                % img = imnoise(img, 'gaussian');
-                % img = imnoise(img, 'gaussian');
-
-            elseif (~isempty(noise_rate))
-                % Perform random corruption
-                % Corruption Size (H x W)
-                cs = [uint16(h*noise_rate) uint16(w*noise_rate)]; 
-
-                % Random location choice
-                % Start of H, W (location)
-                sh = 1 + rand()*(h-cs(1)-1);
-                sw = 1 + rand()*(w-cs(2)-1);
-
-                % Set the corruption
-                cimg = uint8(DbSlice.rand_corrupt_(cs(1), cs(2)));
-
-                if (ch == 1)
-                    img(sh:sh+cs(1)-1, sw:sw+cs(2)-1) = cimg;
-                else
-                    for ich=1:ch
-                        img(sh:sh+cs(1)-1, sw:sw+cs(2)-1, ich) = cimg;
-                    end
-                end
-            end
+            if ~isempty(occl_field); [img, user_data] = DbSlice.add_occlusion_(img, occl_field, index, user_data); end
+            
+            % Adding illumination light source
+            if ~isempty(illu_field); [img, user_data] = DbSlice.add_illumination_(img, illu_field, index, user_data); end                
             
             % Add data to nndb
             nndb.add_data(img);
@@ -970,45 +939,7 @@ classdef DbSlice
             % Update the properties of nndb
             nndb.update_attr(is_new_class);        
         end
-        
-        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%        
-        function img = rand_corrupt_(height, width) 
-            % RAND_CORRUPT: corrupts the image with a (height, width) block.
-            %            
-            % Parameters
-            % ----------
-            % height : int
-            %     Height of the corruption block.
-            % 
-            % width : int
-            %     Width of the corruption block.
-            % 
-            % Returns
-            % -------
-            % img : 3D tensor -uint8
-            %     3D-Data tensor that contains the corrupted image.
-            %
-            
-            percentageWhite = 50; % Alter this value as desired
-
-            dotPattern = zeros(height, width);
-
-            % Set the desired percentage of the elements in dotPattern to 1
-            dotPattern(1:round(0.01*percentageWhite*numel(dotPattern))) = 1;
-
-            % Seed the random number generator
-            % rand('twister',100*sum(clock));
-
-            % Randomly permute the element order
-            dotPattern = reshape(dotPattern(randperm(numel(dotPattern))), height, width);
-            img = dotPattern .* 255;
-
-            % imagesc(dotPattern);
-            % colormap('gray');
-            % axis equal;
-
-        end
-        
+               
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         function nndbs = build_nndb_tr_out_(nndbs, pi, is_new_class, img)
             % BUILD_NNDB_TR_OUT: builds the nndb training target database.
@@ -1184,6 +1115,290 @@ classdef DbSlice
             nndb.update_attr(is_new_class);      
         end
         
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        function img = add_noise_(img, noise_field, index)
+            % ADD_NOISE: Add noise to the image.
+            % 
+            % Parameters
+            % ----------
+            % img : ndarray -uint8
+            %     3D Data tensor. (format = H x W x CH)
+            % 
+            % noise_field : :obj:`NoiseField`
+            %     Indicates the noise(s) for Selection.tr_col_indices.
+            % 
+            % index: int
+            %     The index which the value is required at.
+            % 
+            % Returns
+            % -------
+            % ndarray -uint8
+            %     Image with noise.
+            %
+        
+            % Imports 
+            import nnf.db.DbSlice;
+            
+            % Get noise information at `index`
+            noise = noise_field.get_value_at(index);            
+            if isempty(noise); return; end
+            
+            % Image dimensions
+            [h, w, ch] = size(img);
+            
+            if (strcmp(noise.type, 'g'))
+                img = imnoise(img, 'gaussian');
+                % img = imnoise(img, 'gaussian');
+                % img = imnoise(img, 'gaussian');
+                % img = imnoise(img, 'gaussian');
+
+            elseif (strcmp(noise.type, 'c'))
+                % Perform random corruption
+                % Corruption Size (H x W)
+                cs = [uint16(h * noise.rate) uint16(w * noise.rate)];
+
+                % Random location choice
+                % Start of H, W (location)
+                sh = 1 + rand()*(h-cs(1)-1);
+                sw = 1 + rand()*(w-cs(2)-1);
+
+                % Set the corruption
+                cimg = uint8(DbSlice.rand_corrupt_(cs(1), cs(2)));
+
+                if (ch == 1)
+                    img(sh:sh+cs(1)-1, sw:sw+cs(2)-1) = cimg;
+                else
+                    for ich=1:ch
+                        img(sh:sh+cs(1)-1, sw:sw+cs(2)-1, ich) = cimg;
+                    end
+                end
+            end
+        end
+        
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        function [img, user_data] = add_occlusion_(img, occlusion_field, index, user_data)
+            % ADD_OCCLUSION: Add occlusion to the image.
+            % 
+            % Parameters
+            % ----------
+            % img : ndarray -uint8
+            %     3D Data tensor. (format = H x W x CH)
+            % 
+            % occlusion_field : :obj:`OcclusionField`
+            %     Indicates the occlusion(s) for Selection.tr_col_indices.
+            % 
+            % index: int
+            %     The index which the value is required at.
+            % 
+            % user_data : :obj:`dict`
+            %     PERF: Dictionary to store reusable calculated content during occlusion addition.
+            % 
+            % Returns
+            % -------
+            % ndarray -uint8
+            %     Image with occlusion.
+            % 
+            % user_data : :obj:`dict`
+            %     Updated user_data content.
+            %
+            
+            % Imports 
+            import nnf.db.DbSlice;
+            import nnf.utl.Map;
+            
+            % Get occlusion information at `index`
+            occl = occlusion_field.get_value_at(index);            
+            if isempty(occl); return; end
+
+            % Image dimensions
+            [h, w, ch] = size(img);
+            
+            % If a custom oc_filter is specified
+            occl_filter = occl.filter;
+
+            if isempty(occl_filter)
+                
+                % PERF: Load it if available
+                if isfield(user_data, 'occl')
+                    % ud -> occl -> type -> oc_rate -> oc_offset -> oc_filter
+                    ud_oc_rates = user_data.occl.types.setdefault(occl.type, Map('double'));
+                    ud_oc_offsets = ud_oc_rates.setdefault(occl.rate, Map('int32'));
+                    occl_filter = ud_oc_offsets.setdefault(occl.offset, []);
+                end
+                
+                if isempty(occl_filter)                
+                    occl_filter = DbSlice.get_occlusion_patch(h, w, class(img), occl.type, occl.rate, occl.offset);
+                    
+                    % PERF: Save it for next iteration
+                    % ud -> occl -> type -> oc_rate -> oc_offset -> oc_filter
+                    if ~isfield(user_data, 'occl'); user_data.occl.types = Map(); end
+                    
+                    ud_oc_rates = user_data.occl.types.setdefault(occl.type, Map('double'));
+                    ud_oc_offsets = ud_oc_rates.setdefault(occl.rate, Map('int32'));
+                    ud_oc_offsets.setdefault(occl.offset, occl_filter);
+                end
+            end
+
+            % For grey scale
+            if (ch == 1)
+                img = uint8(occl_filter).*img;
+            else
+                % For colored
+                img = repmat(uint8(occl_filter), 1, 1, ch).*img;
+            end
+        end
+        
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        function [img, user_data] = add_illumination_(img, illumination_field, index, user_data)
+            % ADD_ILLUMINATION: Add illumination to the image.
+            % 
+            % Parameters
+            % ----------
+            % img : ndarray -uint8
+            %     3D Data tensor. (format = H x W x CH)
+            % 
+            % illumination_field : :obj:`OcclusionField`
+            %     Indicates the illumination(s) for Selection.tr_col_indices.
+            % 
+            % index: int
+            %     The index which the value is required at.
+            % 
+            % user_data : :obj:`dict`
+            %     PERF: Dictionary to store reusable calculated content during illumination addition.
+            % 
+            % Returns
+            % -------
+            % ndarray -uint8
+            %     Image with illumination.
+            % 
+            % user_data : :obj:`dict`
+            %     Updated user_data content.
+            %
+            
+            % Imports
+            import nnf.utl.Map;
+            
+            % Get illumination information at `index`
+            illu = illumination_field.get_value_at(index);            
+            if isempty(illu); return; end
+            
+            % PERF: Load it if available
+            info = [];
+            if isfield(user_data, 'illu')         
+                % Only when positions and covariances are scalars
+                if  ~iscell(illumination_field.positions) && ~iscell(illumination_field.covariances)
+                    ud_il_darkness = user_data.illu.brightness.setdefault(illu.brightness, Map('double'));
+                    ud_il_thresholds = ud_il_darkness.setdefault(illu.darkness, Map('double'));
+                    info = ud_il_thresholds.setdefault(illu.threshold, []);
+                end
+            end
+                
+                            
+            % Image dimensions
+            [h, w, ch] = size(img);
+                
+            if ~isempty(info)
+                illu_kernel = info.illu_kernel; 
+                illu_filter_dark = info.illu_filter_dark;
+                mask = info.mask;
+                
+            else               
+                % Generate a 2-D gaussian noise matrix
+                % Sparse Mesh
+                x_range = (0 - illu.position(2))+1 : (h - illu.position(2));
+                y_range = (0 - illu.position(1))+1 : (w - illu.position(1));
+                
+                % Initialize the noise kernal
+                illu_kernel = zeros(numel(x_range), numel(y_range));
+            
+                for i=1:numel(x_range)
+                    for j=1:numel(y_range)
+                        vect = [x_range(i) y_range(j)];
+                        illu_kernel(i, j) = exp(- (1/2) * (vect / illu.covariance) * vect');
+                    end
+                end
+                            
+                % Refining the mask (eliminate the small noise values generated)
+                % Mask is used to average the pixels of the image
+                mask = illu_kernel;
+                mask(mask < illu.threshold) = 0;
+                mask(mask >= illu.threshold) = 1;
+
+                % For darker Areas
+                illu_filter_dark = zeros(h, w);
+                illu_filter_dark (~mask) = -255 * illu.darkness; % reduce by this factor
+                                
+                % PERF: Save it for next iteration
+                % Only when positions and covariances are scalars
+                if  ~iscell(illumination_field.positions) && ~iscell(illumination_field.covariances)
+                    
+                    info.illu_kernel = illu_kernel; 
+                    info.illu_filter_dark = illu_filter_dark;
+                    info.mask = mask;
+                    
+                    % ud -> illu -> brightness -> il_darkness -> il_thresholds
+                    if ~isfield(user_data, 'illu')
+                        user_data.illu.brightness = Map('double'); 
+                    end
+                    
+                    ud_il_darkness = user_data.illu.brightness.setdefault(illu.brightness, Map('double'));
+                    ud_il_thresholds = ud_il_darkness.setdefault(illu.darkness, Map('double'));
+                    ud_il_thresholds.setdefault(illu.threshold, info);                    
+                end
+            end  
+                        
+            % For brighter Areas
+            filtered = double(img) .* mask;            
+            if (ch == 1)
+                illu_scale = 255 - mean(filtered(filtered~=0)); % enhance by this difference                
+            else
+                % For each channel
+                illu_scale = zeros(size(img));                
+                for i=1:ch
+                    tmp = filtered(:, :, i);
+                    illu_scale(:, :, i) = 255 - mean(tmp(tmp~=0)); % enhance by this difference
+                end
+            end  
+            
+            img = uint8(double(img) + illu.brightness * illu_scale .* illu_kernel + illu_filter_dark);
+        end    
+        
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        function img = rand_corrupt_(height, width)
+            % RAND_CORRUPT: corrupts the image with a (height, width) block.
+            %
+            % Parameters
+            % ----------
+            % height : int
+            %     Height of the corruption block.
+            %
+            % width : int
+            %     Width of the corruption block.
+            %
+            % Returns
+            % -------
+            % img : 3D tensor -uint8
+            %     3D-Data tensor that contains the corrupted image.
+            %
+            
+            percentageWhite = 50; % Alter this value as desired
+            
+            dotPattern = zeros(height, width);
+            
+            % Set the desired percentage of the elements in dotPattern to 1
+            dotPattern(1:round(0.01*percentageWhite*numel(dotPattern))) = 1;
+            
+            % Seed the random number generator
+            % rand('twister',100*sum(clock));
+            
+            % Randomly permute the element order
+            dotPattern = reshape(dotPattern(randperm(numel(dotPattern))), height, width);
+            img = dotPattern .* 255;
+            
+            % imagesc(dotPattern);
+            % colormap('gray');
+            % axis equal;
+        end
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     end
 end

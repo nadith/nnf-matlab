@@ -1,5 +1,5 @@
 classdef Map < handle
-    %ContainerMapEx is the wrapper for containers.Map
+    % Map is the wrapper for containers.Map
     %   Provide python like functionality for matlab containers.Map
     
     properties (SetAccess = private)

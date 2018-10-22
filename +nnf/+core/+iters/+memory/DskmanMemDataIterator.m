@@ -12,7 +12,7 @@ classdef DskmanMemDataIterator < nnf.core.iters.DskmanDataIterator
     % Copyright 2015-2016 Nadith Pathirage, Curtin University (chathurdara@gmail.com).
     
     properties (SetAccess = public)
-        nndb;        
+        nndb;
     end
     
     properties (SetAccess = protected)
@@ -36,7 +36,7 @@ classdef DskmanMemDataIterator < nnf.core.iters.DskmanDataIterator
             self.save_to_dir_ = [];
             
             % INHERITED: Whether to read the data
-            % self.read_data_
+            % self.read_data_                       
         end
 
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
