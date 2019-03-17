@@ -43,7 +43,7 @@ classdef SRC
             %                                               'SRV1_9.SRC2.activeSet', 'SRV1_9.SRC2.proximal', 'SRV1_9.SRC2.smo'
             %                                               'L1BENCHMARK.L1LS'
             %                                               'L1BENCHMARK.FISTA'
-            %     inf.method.param:             % Optimization method specific parameters described below
+            %     inf.method.param:                 % Optimization method specific parameters described below
             %
             %     `inf.method.param` Structure (with defaults)
             %     --------------------------------------------
@@ -313,11 +313,11 @@ classdef SRC
             d = size(coeff,2); % No. of test samples
             rate = zeros(1,d);
             label = zeros(1,d);
-            idGroup = unique(lbl_A(1,:)); idNum = length(idGroup);    
+            idGroup = unique(lbl_A); idNum = length(idGroup);    
             dist_matrix = zeros(idNum, d); % Residual norm(..) for each class.
             for i = 1 : d
                 x = coeff(:,i);
-                [temp, dist_matrix(:, i), ~] = SRC.src_pred__(A, Y(:,i), lbl_A(1,:), x, p_norm);        
+                [temp, dist_matrix(:, i), ~] = SRC.src_pred__(A, Y(:,i), lbl_A, x, p_norm);        
                 label(i) = temp(1);
                 rate(i) = label(i) == lbl_B(1,i);
             end

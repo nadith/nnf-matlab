@@ -10,6 +10,9 @@ classdef (Abstract) DAERegModel < handle
     
     properties (SetAccess = public)
         name;             % (s) Name of the instance
+    end
+    
+    properties (SetAccess = protected)
         tr_indices;       % (v) Training indices
         val_indices;      % (v) Validation indices
         te_indices;       % (v) Validation indices
@@ -17,12 +20,11 @@ classdef (Abstract) DAERegModel < handle
         nndbs;            % Cell array of `NNdb` used for layer-wise pretraining
         split_val_data;   % Split the dataset into a validation dataset
         fine_tune;        % Whether to fine-tune or not
-        %dict_nndb_ref;
         
-        in_idx;           % Input database index
-        out_idx;          % Output database index
+        in_idx;           % Input database index of nndbs cell array
+        out_idx;          % Output database index of nndbs cell array
     end
-    
+        
     properties (SetAccess = protected)
        user_data_; 
     end
@@ -151,7 +153,16 @@ classdef (Abstract) DAERegModel < handle
             nncfg.trainParam.epochs   = 125000;
             nncfg.trainParam.max_fail = 4100;
             nncfg.trainParam.min_grad = 1e-10;
-
+            
+            
+           % Loading pre-trained nets from a file 
+           % (Set them outside this method)
+           nncfg.load_from = "NN_OC_dae_30_r0_1.mat";
+           nncfg.load_deepnet = 1;
+           
+           nncfg.load_from = "NN_OC_dae_30_r0_1.mat";
+           nncfg.load_deepnet = 1;
+           
         end
 
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -296,11 +307,12 @@ classdef (Abstract) DAERegModel < handle
             % For all follow up random operations, initialize the same seed
             rng('default');
             
-            % Init
 			if isempty(indices)
+                % Initiliaze self instance with default tr, val, te splits
             	self.init(nndbs);
-			else
-				self.init(nndbs,indices);
+            else
+                % Initiliaze self instance with user-specified tr, val, te splits
+				self.init(nndbs, indices);
 			end
         end        
        
@@ -322,11 +334,16 @@ classdef (Abstract) DAERegModel < handle
                 if (self.split_val_data)
                     [self.tr_indices, self.val_indices, self.te_indices] = dividerand(n, 70/100, 15/100, 15/100);
                 else
+                    % No validation dataset
                     [self.tr_indices, self.val_indices, self.te_indices] = dividerand(n, 85/100, 0, 15/100);
                 end
                 
             else
-                self.split_val_data = true; % Force NN to use following datasplit. Ref: train_and_eval(...)
+                
+                % Force NN to use following user-specified datasplit. 
+                % Ref: train_and_eval(...) function
+                
+                self.split_val_data = true; 
                 
                 % Load explicit indices
                 self.tr_indices = indices{1};
@@ -551,7 +568,7 @@ classdef (Abstract) DAERegModel < handle
             pp_infos = pp_map_min_max_(self, pp_infos);
             
         end
-        
+                
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
         function train_and_eval(self, nncfg, pp_infos)
             % Train and evaluate the `DAERegModel`.
@@ -584,22 +601,23 @@ classdef (Abstract) DAERegModel < handle
             %   divideFcn:  dividetrain
             %   trainFcn:   trainscg
             %   performFcn: msesparse
-            %       
+            %  
+            
+            % imports
+            import nnf.alg.daereg.DAERegModel;
             
             % Callback
             self.on_train_start_(pp_infos);
-            
-            if (self.split_val_data)
-                XX = self.nndbs{self.in_idx}.features;
-            else                
-                XX = self.nndbs{self.in_idx}.features(:, self.tr_indices);
-            end
+
+            % XX is the complete database, the split happens in 
+            % self.trainAutoencoder() method
+            XX = self.nndbs{self.in_idx}.features;
             XX_te = self.nndbs{self.in_idx}.features(:, self.te_indices);
 			XX_val = self.nndbs{self.in_idx}.features(:, self.val_indices);
 
-            % Configure the network count
-            aes_n = 0;
-            nets_n = 0;
+            % Configure the networks count
+            aes_n = 0;      % Autoencoder for dimensionality reduction
+            nets_n = 0;     % Autoencoders for regression
             if (isfield(nncfg, 'aes'))
                 aes_n = numel(nncfg.aes);
             end            
@@ -613,26 +631,38 @@ classdef (Abstract) DAERegModel < handle
             tr_stats = cell(1, aes_n + nets_n + 1);            
             total_time = 0;
             
+            % Load trained models from the file (if available)
             loaded = []; deepnet = [];
-            if (isfield(nncfg, 'load_from')); loaded = load(nncfg.load_from); end
-            if (isfield(nncfg, 'load_deepnet') && nncfg.load_deepnet)
+            load_from = DAERegModel.get_field_(nncfg, 'load_from');
+            load_deepnet = DAERegModel.get_field_(nncfg, 'load_deepnet');
+            
+            if (~isempty(load_from)); loaded = load(nncfg.load_from); end
+            if (load_deepnet)
                 if (isempty(loaded)); error("Please specify 'nncfg.load_from'"); end                                
                 tr_stats = loaded.tr_stats;
                 deepnet = loaded.deepnet;
             end
-
-            % Only if deepnet is not already loaded
-            if (isempty(deepnet)) 
+            
+            % If `deepnet` is already loaded from file, training below is
+            % not required
+            if (isempty(deepnet))
+                
+                % Train autoencoders for dimentationality reduction
                 for i=1:aes_n
                     aecfg = nncfg.aes(i);
                     aecfg.validate();
 
-                    if (isfield(nncfg, 'stop_train') && nncfg.stop_train(net_idx))
+                    % Whether user has requested an explicit stop trianing
+                    % @ net_idx 
+                    stop_train = DAERegModel.get_field_(nncfg, 'stop_train', net_idx);
+                    if (~isempty(stop_train))
                         self.on_train_end_(pp_infos, nncfg, pretr_nets, [], [], tr_stats, [], [], [], []);
                         return;
                     end
                     
-                    if (isfield(nncfg, 'load_aes') && nncfg.load_aes(i))
+                    % Try loading the trained AE from file
+                    load_aes = DAERegModel.get_field_(nncfg, 'load_aes', i);
+                    if (~isempty(load_aes))
                         if (isempty(loaded)); error("Please specify 'nncfg.load_from'"); end
                         autoenc = loaded.pretr_nets{net_idx};
                         tr_stat = loaded.tr_stats{net_idx};
@@ -686,8 +716,11 @@ classdef (Abstract) DAERegModel < handle
             XX = self.on_dr_end_(pretr_nets(1:aes_n), XX); % Callback
             XX_val = XX(:, self.val_indices);
             
-            % Only if deepnet is not already loaded
+            % If `deepnet` is already loaded from file, training below is
+            % not required
             if (isempty(deepnet))
+                
+                % Train autoencoders for regression
                 for i=1:nets_n
                     netcfg = nncfg.nets(i);
                     [XXT, XXT_te, XXT_val] = self.on_rl_loop_init_(i);
@@ -695,12 +728,17 @@ classdef (Abstract) DAERegModel < handle
                     % Normalizing output for relationship learning AE.
                     % netcfg.outProcessFcns{1} = 'mapminmax';
 
-                    if (isfield(nncfg, 'stop_train') && nncfg.stop_train(net_idx))
+                    % Whether user has requested an explicit stop trianing
+                    % @ net_idx 
+                    stop_train = DAERegModel.get_field_(nncfg, 'stop_train', net_idx);
+                    if (~isempty(stop_train))
                         self.on_train_end_(pp_infos, nncfg, pretr_nets, [], [], tr_stats, [], [], [], []);
                         return;
                     end
-                    
-                    if (isfield(nncfg, 'load_nets') && nncfg.load_nets(i))                        
+                                            
+                    % Try loading the trained AE from file
+                    load_nets = DAERegModel.get_field_(nncfg, 'load_nets', i);
+                    if (~isempty(load_nets))                     
                        if (isempty(loaded)); error("Please specify 'nncfg.load_from'"); end
                        autoenc = loaded.pretr_nets{net_idx};
                        tr_stat = loaded.tr_stats{net_idx};
@@ -753,13 +791,8 @@ classdef (Abstract) DAERegModel < handle
             % XXF_te = tansig(net.IW{1} * XXF_te + repmat(net.b{1}, 1, size(XXF_te, 2)));  
 
             % Setup data for fine tuning
-            if (self.split_val_data)
-                XX = self.nndbs{self.in_idx}.features;
-                YY = self.nndbs{self.out_idx}.features;
-            else                
-                XX = self.nndbs{self.in_idx}.features(:, [self.tr_indices self.val_indices]);
-                YY = self.nndbs{self.out_idx}.features(:, [self.tr_indices self.val_indices]);
-            end
+            XX = self.nndbs{self.in_idx}.features;
+            YY = self.nndbs{self.out_idx}.features;
     
             %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
             % Stack the layers for a Deep Network and Fine-Tune
@@ -915,11 +948,13 @@ classdef (Abstract) DAERegModel < handle
             % Training function and related learning parameters
             % default: 'trainscg'
             deepnet.trainFcn = nncfg.trainFcn;
-            fields = fieldnames(nncfg.trainParam);
-            for fn=fields'
-              % since fn is a 1-by-1 cell array, you still need to index into it, unfortunately
-              deepnet.trainParam.(fn{1}) = nncfg.trainParam.(fn{1});
-            end           
+            if (~isempty(nncfg.trainParam))
+                fields = fieldnames(nncfg.trainParam);
+                for fn=fields'
+                  % since fn is a 1-by-1 cell array, you still need to index into it, unfortunately
+                  deepnet.trainParam.(fn{1}) = nncfg.trainParam.(fn{1});
+                end
+            end
 
             % Set performance param
             deepnet.performFcn = nncfg.cost_fn;
@@ -928,19 +963,11 @@ classdef (Abstract) DAERegModel < handle
             deepnet.performParam.regularization = nncfg.reg_ratio;
             
             % Setup Division of Data for Training, Validation, Testing
-            if (self.split_val_data)
-                deepnet.divideFcn = 'divideind';
-                deepnet.divideMode = 'sample';  % Divide up every sample
-                deepnet.divideParam.trainInd = self.tr_indices;
-                deepnet.divideParam.valInd = self.val_indices;
-                deepnet.divideParam.testInd = self.te_indices;                
-            else                
-                deepnet.divideFcn               = 'dividerand'; % Divide data randomly
-                deepnet.divideMode              = 'sample';     % Divide up every sample
-                deepnet.divideParam.trainRatio  = 70/100;
-                deepnet.divideParam.valRatio    = 15/100;
-                deepnet.divideParam.testRatio   = 15/100;                
-            end
+            deepnet.divideFcn = 'divideind';
+            deepnet.divideMode = 'sample';  % Divide up every sample
+            deepnet.divideParam.trainInd = self.tr_indices;
+            deepnet.divideParam.valInd = self.val_indices;
+            deepnet.divideParam.testInd = self.te_indices;
 
            	% Deep neural network
             if (isfield(nncfg, 'dnn'))
@@ -953,8 +980,7 @@ classdef (Abstract) DAERegModel < handle
                 total_time = total_time + sum(tr_stat.time);
                 tr_stats{net_idx} = tr_stat;
             else 
-                deepnet_ft = deepnet;
-                
+                deepnet_ft = deepnet;                
             end            
             
             %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -1021,17 +1047,28 @@ classdef (Abstract) DAERegModel < handle
                     ' Val:' num2str(val_db_perf) ' R:' num2str(r_val) ' S:(m:' num2str(mean(e_val(:))) ', d:' num2str(std(e_val(:))) ')'...
                     ' Time:' num2str(total_time/1000)]);            
             end
-            
-            if (~self.split_val_data)
-                XX = self.nndbs{self.in_idx}.features;
-                YY = self.nndbs{self.out_idx}.features;
-            end
-            
+                        
             % Callback
             self.on_train_end_(pp_infos, nncfg, pretr_nets, deepnet, deepnet_ft, tr_stats, XX, YY, XX_te, YY_te);
         end
         
         %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    end
+    
+    methods (Access = protected, Static)  
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+        % Protected Interface       
+       	%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%  
+        function ret_value = get_field_(nnstruct, field_name, index)           
+            ret_value = [];
+            if (isfield(nnstruct, field_name))                 
+                if (nargin < 4)
+                    eval(sprintf("ret_value = nnstruct.%s", field_name));
+                else
+                    eval(sprintf("ret_value = nnstruct.%s(%d)", field_name, index));
+                end
+            end
+        end
     end
     
     methods (Abstract, Access = protected)
@@ -1049,11 +1086,7 @@ classdef (Abstract) DAERegModel < handle
         % Protected Interface       
        	%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%                
         function [XXT, XXT_te, XXT_val] = on_rl_loop_init_(self, loop_idx)
-            if (self.split_val_data)
-                XXT = self.nndbs{self.out_idx}.features;
-            else                
-                XXT = self.nndbs{self.out_idx}.features(:, self.tr_indices);
-            end                
+            XXT = self.nndbs{self.out_idx}.features;               
             XXT_te = self.nndbs{self.out_idx}.features(:, self.te_indices);                
             XXT_val = self.nndbs{self.out_idx}.features(:, self.val_indices); 
         end
@@ -1265,10 +1298,12 @@ classdef (Abstract) DAERegModel < handle
             % Training function and related learning parameters
             % default: 'trainscg'
             autonet.trainFcn = aecfg.trainFcn;
-            fields = fieldnames(aecfg.trainParam);
-            for fn=fields'
-              %# since fn is a 1-by-1 cell array, you still need to index into it, unfortunately
-              autonet.trainParam.(fn{1}) = aecfg.trainParam.(fn{1});
+            if (~isempty(aecfg.trainParam))
+                fields = fieldnames(aecfg.trainParam);
+                for fn=fields'
+                  %# since fn is a 1-by-1 cell array, you still need to index into it, unfortunately
+                  autonet.trainParam.(fn{1}) = aecfg.trainParam.(fn{1});
+                end
             end
 
             % traingdm learning parameters
@@ -1283,19 +1318,11 @@ classdef (Abstract) DAERegModel < handle
             % 'trainlm';  % Levenberg-Marquardt backpropagation.
             
             % Setup Division of Data for Training, Validation, Testing
-            if (self.split_val_data)
-                autonet.divideFcn = 'divideind';
-                autonet.divideMode = 'sample';  % Divide up every sample
-                autonet.divideParam.trainInd = self.tr_indices;
-                autonet.divideParam.valInd = self.val_indices;
-                autonet.divideParam.testInd = self.te_indices;              
-            else                
-                autonet.divideFcn = 'dividerand';  % Divide data randomly
-                autonet.divideMode = 'sample';  % Divide up every sample
-                autonet.divideParam.trainRatio  = 85/100;
-                autonet.divideParam.valRatio    = 15/100;
-                autonet.divideParam.testRatio   = 0;
-            end
+            autonet.divideFcn = 'divideind';
+            autonet.divideMode = 'sample';  % Divide up every sample
+            autonet.divideParam.trainInd = self.tr_indices;
+            autonet.divideParam.valInd = self.val_indices;
+            autonet.divideParam.testInd = self.te_indices;
             
             %if (~strcmp(aecfg.cost_fn, 'msesparse'))
                 % trainAutoencoder only supports 'msesparse' by default. Thus customized.
@@ -1379,7 +1406,7 @@ classdef (Abstract) DAERegModel < handle
             % Train AE
             if (~isempty(Y))
                 %autonet = self.batch_train(autonet, X, Y, 125000, 5000)
-                [autonet, tr_stat] = train(autonet,X, Y, 'useGPU','yes');
+                [autonet, tr_stat] = train(autonet, X, Y, 'useGPU','yes');
                 autoenc = Autoencoder(autonet, true, 1,0);
                 
             else
